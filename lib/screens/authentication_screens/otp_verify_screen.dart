@@ -233,31 +233,68 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen>
                                 }
 
                                 setState(() => _loadingResend = true);
-                                final api = AuthApi();
-                                final r = (flow == 'register')
-                                    ? await api.resendRegister(
-                                        phone: phone, lang: 'ar')
-                                    : await api.pwdResend(
-                                        phone: phone, lang: 'ar');
-                                setState(() => _loadingResend = false);
 
-                                if (r['ok'] == true) {
-                                  final json = r['json'] ?? {};
-                                  final sec =
-                                      (json['resend_after_sec'] as int?) ?? 60;
+                                try {
+                                  final api = AuthApi();
+                                  final r = (flow == 'register')
+                                      ? await api.resendRegister(
+                                          phone: phone, lang: 'ar')
+                                      : await api.pwdResend(
+                                          phone: phone, lang: 'ar');
+
+                                  if (r['ok'] == true) {
+                                    final json = r['json'] ?? {};
+                                    // البحث عن وقت الانتظار في مفاتيح مختلفة محتملة
+                                    final sec = (json['resend_after_sec'] ??
+                                        json['wait_time'] ??
+                                        json['next_resend_in'] ??
+                                        60) as int;
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              'تم الإرسال. أعِدي المحاولة بعد $sec ث')),
+                                    );
+
+                                    _startTimer(sec);
+                                  } else {
+                                    final json = r['json'] ?? {};
+                                    String errorMessage = 'تعذّر إعادة الإرسال';
+
+                                    if (json['detail'] != null) {
+                                      if (json['detail'] is String) {
+                                        errorMessage = json['detail'];
+                                      } else if (json['detail'] is Map) {
+                                        final details = json['detail'] as Map;
+                                        if (details['non_field_errors'] !=
+                                            null) {
+                                          errorMessage =
+                                              details['non_field_errors'][0];
+                                        }
+                                      }
+                                    } else if (json['code'] != null) {
+                                      switch (json['code']) {
+                                        case 'rate_limited':
+                                          errorMessage =
+                                              'انتظر قليلاً قبل المحاولة مرة أخرى';
+                                          break;
+                                        default:
+                                          errorMessage = json['code'];
+                                      }
+                                    }
+
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(errorMessage)));
+                                  }
+                                } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                         content: Text(
-                                            'تم الإرسال. أعِدي المحاولة بعد $sec ث')),
+                                            'حدث خطأ في الاتصال: ${e.toString()}')),
                                   );
-                                  _startTimer(
-                                      sec); // ✅ ابدئي العدّاد بما أعاده الخادم
-                                } else {
-                                  final err = (r['json']?['detail'] ??
-                                          'تعذّر إعادة الإرسال')
-                                      .toString();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(err)));
+                                } finally {
+                                  if (mounted)
+                                    setState(() => _loadingResend = false);
                                 }
                               },
 
@@ -305,54 +342,100 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen>
                             }
 
                             if (flow == 'register') {
+                              // تدفق التسجيل
                               setState(() => _loadingVerify = true);
-                              final r = await AuthApi()
-                                  .verify(phone: phone, code: code);
-                              setState(() => _loadingVerify = false);
 
-                              if (r['ok'] == true) {
-                                // <<< NEW: حفظ التوكنات من ردّ verify (فقط هذا الإضافة)
-                                final json = r['json'] ?? {};
-                                final access = json['access']?.toString();
-                                final refresh = json['refresh']?.toString();
-                                if (access != null && refresh != null) {
-                                  await TokenStorage.save(access, refresh);
-                                }
-                                // >>> END NEW
+                              try {
+                                final r = await AuthApi()
+                                    .verify(phone: phone, code: code);
 
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text('تم التحقق.')));
+                                if (r['ok'] == true) {
+                                  // نجح التحقق، حفظ التوكنات من الاستجابة
+                                  final json = r['json'] ?? {};
+                                  final access = json['access']?.toString();
+                                  final refresh = json['refresh']?.toString();
+                                  final user = json['user'] ?? {};
 
-                                if (role == 'worker') {
-                                  Navigator.pushReplacementNamed(
-                                    context,
-                                    AppRoutes.workerOnboarding,
-                                    arguments: {'role': 'worker'},
-                                  );
+                                  if (access != null && refresh != null) {
+                                    await TokenStorage.save(access, refresh);
+                                    await TokenStorage.saveUserData(user);
+                                  }
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text('تم التحقق بنجاح')));
+
+                                  // التوجيه حسب نوع المستخدم
+                                  if (role == 'worker') {
+                                    Navigator.pushReplacementNamed(
+                                      context,
+                                      AppRoutes.workerOnboarding,
+                                      arguments: {'role': 'worker'},
+                                    );
+                                  } else {
+                                    Navigator.pushReplacementNamed(
+                                      context,
+                                      AppRoutes.login,
+                                      arguments: {'role': role},
+                                    );
+                                  }
                                 } else {
-                                  Navigator.pushReplacementNamed(
-                                      context, AppRoutes.login);
+                                  // فشل التحقق
+                                  final json = r['json'] ?? {};
+                                  String errorMessage = 'الرمز غير صحيح';
+
+                                  if (json['detail'] != null) {
+                                    if (json['detail'] is String) {
+                                      errorMessage = json['detail'];
+                                    } else if (json['detail'] is Map) {
+                                      final details = json['detail'] as Map;
+                                      if (details['code'] != null) {
+                                        errorMessage = details['code'][0];
+                                      } else if (details['non_field_errors'] !=
+                                          null) {
+                                        errorMessage =
+                                            details['non_field_errors'][0];
+                                      }
+                                    }
+                                  } else if (json['code'] != null) {
+                                    switch (json['code']) {
+                                      case 'invalid_code':
+                                        errorMessage = 'الرمز غير صحيح';
+                                        break;
+                                      case 'expired_code':
+                                        errorMessage = 'انتهت صلاحية الرمز';
+                                        break;
+                                      case 'user_not_found':
+                                        errorMessage = 'المستخدم غير موجود';
+                                        break;
+                                      default:
+                                        errorMessage = json['code'];
+                                    }
+                                  }
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(errorMessage)));
                                 }
-                              } else {
-                                final err =
-                                    (r['json']?['detail'] ?? 'الرمز غير صحيح')
-                                        .toString();
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(SnackBar(content: Text(err)));
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'حدث خطأ في الاتصال: ${e.toString()}')),
+                                );
+                              } finally {
+                                if (mounted)
+                                  setState(() => _loadingVerify = false);
                               }
                             } else {
-                              // استرجاع كلمة المرور
-                              debugPrint(
-                                  'OTP flow=pwd → navigate to reset with phone=$phone, code=${_codeController.text.trim()}');
+                              // تدفق استرجاع كلمة المرور
                               Navigator.pushNamed(
                                 context,
                                 AppRoutes.resetPassword,
                                 arguments: {
                                   'phone': phone,
                                   'code': code,
-                                  'role': role
-                                }, // <<< role
+                                  'role': role,
+                                },
                               );
                             }
                           },

@@ -22,6 +22,12 @@ dependencies:
   # مكتبات إدارة الثيم
   provider: ^6.1.1
   shared_preferences: ^2.2.2
+  
+  # المكتبات الجديدة المطلوبة للخرائط والموقع
+  google_maps_flutter: ^2.5.0
+  permission_handler: ^11.0.1
+  location: ^5.0.3
+  geolocator: ^10.1.0
 
 dev_dependencies:
   flutter_test:

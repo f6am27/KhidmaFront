@@ -7,6 +7,7 @@ import 'package:micro_emploi_app/constants/colors.dart';
 import 'package:micro_emploi_app/constants/text_styles.dart';
 import 'package:micro_emploi_app/routes/app_routes.dart';
 import '../../services/auth_api.dart'; // <<< ADD
+import '../../core/storage/token_storage.dart';
 
 class WorkerOnboardingScreen extends StatefulWidget {
   @override
@@ -155,20 +156,67 @@ class _WorkerOnboardingScreenState extends State<WorkerOnboardingScreen> {
     // TODO: في المرحلة (ج) سنرسل بقية بيانات البروفايل (avatar/category/price/days/time/area/desc)
 
     // ضبط onboarding_completed=True في الخادم
-    final r = await AuthApi().completeWorkerOnboarding();
-    if (r['ok'] != true) {
-      final err =
-          (r['json']?['detail'] ?? 'Échec de la finalisation').toString();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-      return; // لا ننتقل للـHome إذا فشل الضبط
-    }
+    try {
+      // ضبط onboarding_completed=True في الخادم
+      final r = await AuthApi().completeWorkerOnboarding();
 
-    // نجاح: الذهاب إلى Home كعامل
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.home,
-      arguments: {'role': 'worker'}, // مهم: نمرر worker
-    );
+      if (r['ok'] == true) {
+        // نجح إكمال Onboarding
+        final json = r['json'] ?? {};
+        final user = json['user'] ?? {};
+
+        // تحديث بيانات المستخدم المحفوظة محلياً
+        await TokenStorage.saveUserData(user);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم إكمال الملف الشخصي بنجاح')),
+        );
+
+        // الانتقال إلى الشاشة الرئيسية للعامل
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.home,
+          arguments: {'role': 'worker'},
+        );
+      } else {
+        // فشل إكمال Onboarding
+        final json = r['json'] ?? {};
+        String errorMessage = 'فشل في إكمال الملف الشخصي';
+
+        if (json['detail'] != null) {
+          if (json['detail'] is String) {
+            errorMessage = json['detail'];
+          } else if (json['detail'] is Map) {
+            final details = json['detail'] as Map;
+            if (details['non_field_errors'] != null) {
+              errorMessage = details['non_field_errors'][0];
+            }
+          }
+        } else if (json['code'] != null) {
+          switch (json['code']) {
+            case 'not_worker':
+              errorMessage = 'هذا الحساب ليس حساب عامل';
+              break;
+            case 'already_completed':
+              errorMessage = 'تم إكمال الملف الشخصي مسبقاً';
+              break;
+            case 'unauthorized':
+              errorMessage = 'يجب تسجيل الدخول أولاً';
+              break;
+            default:
+              errorMessage = json['code'];
+          }
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ في الاتصال: ${e.toString()}')),
+      );
+    }
   }
   // >>> END REPLACE
 

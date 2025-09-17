@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-// import 'client_screens/home/home_screen.dart';
-import 'worker_screens/worker_home_screen.dart';
 // استيراد نظام التنقل الجديد للعملاء
 import 'package:micro_emploi_app/widgets/client_main_navigation.dart';
+import 'package:micro_emploi_app/widgets/worker_main_navigation.dart';
 
 class HomeRouter extends StatelessWidget {
   final String? role;
@@ -18,8 +17,8 @@ class HomeRouter extends StatelessWidget {
     final resolvedRole =
         (raw == 'worker' || raw == 'prestataire') ? 'worker' : 'client';
 
-    // للعاملين نعرض WorkerHomeScreen كما هو (مؤقتاً)
-    if (resolvedRole == 'worker') return WorkerHomeScreen();
+    // للعاملين نستخدم نظام التنقل الجديد WorkerMainNavigation
+    if (resolvedRole == 'worker') return WorkerMainNavigation();
 
     // للعملاء نستخدم نظام التنقل الجديد ClientMainNavigation
     return ClientMainNavigation();

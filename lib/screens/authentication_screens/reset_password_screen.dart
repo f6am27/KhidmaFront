@@ -200,50 +200,109 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
                           _primaryButton(
                             label:
                                 _loading ? '...' : 'Confirmer le mot de passe ',
+                            // في onTap للزر الرئيسي، التحديث:
+
                             onTap: _loading
                                 ? null
                                 : () async {
+                                    if (!_formKey.currentState!.validate())
+                                      return;
+
                                     if (_pass1.text != _pass2.text) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
                                         const SnackBar(
-                                          content: Text(
-                                              'كلمتا المرور غير متطابقتين'),
-                                        ),
+                                            content: Text(
+                                                'كلمتا المرور غير متطابقتين')),
                                       );
                                       return;
                                     }
-                                    setState(() => _loading = true);
-                                    final r = await AuthApi().pwdConfirm(
-                                      phone: phone,
-                                      code: code,
-                                      newPassword: _pass1.text,
-                                      newPasswordConfirm: _pass2.text,
-                                    );
-                                    setState(() => _loading = false);
 
-                                    if (r['ok'] == true) {
+                                    setState(() => _loading = true);
+
+                                    try {
+                                      final r = await AuthApi().pwdConfirm(
+                                        phone: phone,
+                                        code: code,
+                                        newPassword: _pass1.text,
+                                        newPasswordConfirm: _pass2.text,
+                                      );
+
+                                      if (r['ok'] == true) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content: Text(
+                                                  'تم تغيير كلمة المرور بنجاح')),
+                                        );
+
+                                        // العودة إلى شاشة الدخول المناسبة حسب الدور
+                                        Navigator.pushReplacementNamed(
+                                          context,
+                                          AppRoutes.login,
+                                          arguments: {'role': role},
+                                        );
+                                      } else {
+                                        // فشل تغيير كلمة المرور
+                                        final json = r['json'] ?? {};
+                                        String errorMessage =
+                                            'تعذّر تغيير كلمة المرور';
+
+                                        if (json['detail'] != null) {
+                                          if (json['detail'] is String) {
+                                            errorMessage = json['detail'];
+                                          } else if (json['detail'] is Map) {
+                                            final details =
+                                                json['detail'] as Map;
+                                            if (details['code'] != null) {
+                                              errorMessage = details['code'][0];
+                                            } else if (details[
+                                                    'new_password'] !=
+                                                null) {
+                                              errorMessage =
+                                                  details['new_password'][0];
+                                            } else if (details[
+                                                    'non_field_errors'] !=
+                                                null) {
+                                              errorMessage =
+                                                  details['non_field_errors']
+                                                      [0];
+                                            }
+                                          }
+                                        } else if (json['code'] != null) {
+                                          switch (json['code']) {
+                                            case 'invalid_code':
+                                              errorMessage =
+                                                  'رمز التحقق غير صالح';
+                                              break;
+                                            case 'expired_code':
+                                              errorMessage =
+                                                  'انتهت صلاحية رمز التحقق';
+                                              break;
+                                            case 'user_not_found':
+                                              errorMessage =
+                                                  'المستخدم غير موجود';
+                                              break;
+                                            default:
+                                              errorMessage = json['code'];
+                                          }
+                                        }
+
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(content: Text(errorMessage)),
+                                        );
+                                      }
+                                    } catch (e) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('تم تغيير كلمة المرور'),
-                                        ),
+                                        SnackBar(
+                                            content: Text(
+                                                'حدث خطأ في الاتصال: ${e.toString()}')),
                                       );
-                                      // <<< NEW: ارجاع المستخدم إلى شاشة الدخول المناسبة حسب role
-                                      Navigator.pushReplacementNamed(
-                                        context,
-                                        AppRoutes.login,
-                                        arguments: {'role': role},
-                                      );
-                                      // >>> END NEW
-                                    } else {
-                                      final err = (r['json']?['detail'] ??
-                                              'تعذّر تغيير كلمة المرور')
-                                          .toString();
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(content: Text(err)),
-                                      );
+                                    } finally {
+                                      if (mounted)
+                                        setState(() => _loading = false);
                                     }
                                   },
                             radius: radius,

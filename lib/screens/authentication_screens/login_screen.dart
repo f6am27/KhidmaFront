@@ -356,62 +356,99 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       child: ElevatedButton(
         // >>> REPLACE: onPressed of "تسجيل الدخول"
+// في _buildSubmitButton() method، استبدال onPressed:
+
         onPressed: _loading
             ? null
             : () async {
+                if (!_formKey.currentState!.validate()) return;
+
                 setState(() => _loading = true);
-                final r = await AuthApi().login(
-                  id: _idController.text.trim(),
-                  password: _passController.text,
-                );
-                setState(() => _loading = false);
 
-                if (r['ok'] == true) {
-                  final json = r['json'] ?? {};
-                  final user = (json['user'] ?? {}) as Map;
+                try {
+                  final r = await AuthApi().login(
+                    id: _idController.text.trim(),
+                    password: _passController.text,
+                  );
 
-                  // دور الحساب الذي رجع من الخادم
-                  final serverRole = (user['role'] ?? 'client')
-                      .toString()
-                      .toLowerCase()
-                      .trim();
+                  if (r['ok'] == true) {
+                    final json = r['json'] ?? {};
+                    final user = Map<String, dynamic>.from(json['user'] ?? {});
 
-                  // دور البوابة الحالية (واجهة العميل أم العامل؟)
-                  final portalRole =
-                      (_role == 'prestataire') ? 'worker' : 'client';
+                    // دور الحساب الذي رجع من الخادم
+                    final serverRole = (user['role'] ?? 'client')
+                        .toString()
+                        .toLowerCase()
+                        .trim();
 
-                  // ✅ بوابة الدخول: منع دخول العامل من واجهة العميل والعكس
-                  if (serverRole != portalRole) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('هذا الحساب غير موجود')),
-                    );
-                    return; // لا نحفظ توكنات ولا ننتقل
-                  }
+                    // دور البوابة الحالية (واجهة العميل أم العامل؟)
+                    final portalRole =
+                        (_role == 'prestataire') ? 'worker' : 'client';
 
-                  // حفظ التوكنات بعد نجاح البوابة
-                  await TokenStorage.save(json['access'], json['refresh']);
+                    // ✅ بوابة الدخول: منع دخول العامل من واجهة العميل والعكس
+                    if (serverRole != portalRole) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('هذا الحساب غير موجود')),
+                      );
+                      return; // لا نحفظ توكنات ولا ننتقل
+                    }
 
-                  // التوجيه حسب حالة الـ onboarding
-                  final onboardingDone = user['onboarding_completed'] == true;
-                  if (serverRole == 'worker' && !onboardingDone) {
-                    Navigator.pushReplacementNamed(
-                      context,
-                      AppRoutes.workerOnboarding,
-                      arguments: {'role': 'worker'},
-                    );
+                    // حفظ التوكنات بعد نجاح البوابة
+                    await TokenStorage.save(json['access'], json['refresh']);
+
+                    // حفظ بيانات المستخدم
+                    await TokenStorage.saveUserData(
+                        Map<String, dynamic>.from(user));
+
+                    // التوجيه حسب حالة الـ onboarding
+                    final onboardingDone = user['onboarding_completed'] == true;
+                    if (serverRole == 'worker' && !onboardingDone) {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.workerOnboarding,
+                        arguments: {'role': 'worker'},
+                      );
+                    } else {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.home,
+                        arguments: {'role': serverRole},
+                      );
+                    }
                   } else {
-                    Navigator.pushReplacementNamed(
-                      context,
-                      AppRoutes.home,
-                      arguments: {'role': serverRole},
+                    final json = r['json'] ?? {};
+                    String errorMessage = 'بيانات الدخول غير صحيحة';
+
+                    // معالجة أنواع مختلفة من الأخطاء
+                    if (json['detail'] != null) {
+                      if (json['detail'] is String) {
+                        errorMessage = json['detail'];
+                      } else if (json['detail'] is Map) {
+                        // إذا كانت detail تحتوي على أخطاء الحقول
+                        final details = json['detail'] as Map;
+                        if (details['non_field_errors'] != null) {
+                          errorMessage = details['non_field_errors'][0];
+                        } else if (details['phone_or_username'] != null) {
+                          errorMessage = details['phone_or_username'][0];
+                        } else if (details['password'] != null) {
+                          errorMessage = details['password'][0];
+                        }
+                      }
+                    } else if (json['code'] != null) {
+                      errorMessage = json['code'];
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMessage)),
                     );
                   }
-                } else {
-                  final err =
-                      (r['json']?['detail'] ?? 'بيانات الدخول غير صحيحة')
-                          .toString();
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(err)));
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('حدث خطأ في الاتصال: ${e.toString()}')),
+                  );
+                } finally {
+                  if (mounted) setState(() => _loading = false);
                 }
               },
 

@@ -1,18 +1,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
-    <!-- >>> ADD: Internet permission -->
+    <!-- Internet permission -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- <<< END ADD -->
-
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    
+    <!-- >>> ADD: Location permissions للخرائط والموقع -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- <<< END ADD -->
 
     <application
         android:label="micro_emploi_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"
-   
-    >
+        android:usesCleartextTraffic="true">
+        
+        <!-- >>> ADD: Google Maps API Key -->
+        <meta-data 
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDaToR9tCLhBpdS5ZqVr-TrIaABuPnsAXk"/>
+        <!-- <<< END ADD -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -41,11 +49,7 @@
             android:value="2" />
     </application>
 
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT
-
-         Used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <!-- Required to query activities that can process text -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

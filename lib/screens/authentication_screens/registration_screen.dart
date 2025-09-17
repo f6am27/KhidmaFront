@@ -338,47 +338,81 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         ],
       ),
       child: ElevatedButton(
+// في _buildSubmitButton method، استبدال onPressed:
+
         onPressed: _loading
             ? null
             : () async {
                 if (!_formKey.currentState!.validate()) return;
 
                 setState(() => _loading = true);
-                final api = AuthApi();
 
                 try {
-                  final response = await api.register(
+                  final response = await AuthApi().register(
                     username: _nameController.text.trim(),
                     phone: _phoneController.text.trim(),
                     password: _passwordController.text,
                     lang: 'ar',
-                    role: role, // <<< تمرير الدور للباك
+                    role: role,
                   );
 
                   if (response['ok'] == true) {
+                    // نجح التسجيل، الانتقال لصفحة التحقق
                     if (!mounted) return;
-                    // الانتقال لصفحة التحقق ومعنا الدور + نوع التدفّق
                     Navigator.pushNamed(
                       context,
                       AppRoutes.otpVerify,
                       arguments: {
                         'phone': _phoneController.text.trim(),
                         'flow': 'register',
-                        'role': role, // <<< تمرير الدور
+                        'role': role,
                       },
                     );
                   } else {
-                    final err =
-                        (response['json']?['detail'] ?? 'حدث خطأ').toString();
+                    // فشل التسجيل، عرض رسالة الخطأ
+                    final json = response['json'] ?? {};
+                    String errorMessage = 'حدث خطأ أثناء التسجيل';
+
+                    // معالجة أنواع مختلفة من الأخطاء
+                    if (json['detail'] != null) {
+                      if (json['detail'] is String) {
+                        errorMessage = json['detail'];
+                      } else if (json['detail'] is Map) {
+                        final details = json['detail'] as Map;
+                        // معالجة أخطاء الحقول المختلفة
+                        if (details['phone'] != null) {
+                          errorMessage = details['phone'][0];
+                        } else if (details['username'] != null) {
+                          errorMessage = details['username'][0];
+                        } else if (details['password'] != null) {
+                          errorMessage = details['password'][0];
+                        } else if (details['non_field_errors'] != null) {
+                          errorMessage = details['non_field_errors'][0];
+                        }
+                      }
+                    } else if (json['code'] != null) {
+                      switch (json['code']) {
+                        case 'user_exists':
+                          errorMessage = 'هذا الرقم مسجل مسبقاً';
+                          break;
+                        case 'invalid_phone':
+                          errorMessage = 'رقم الهاتف غير صالح';
+                          break;
+                        default:
+                          errorMessage = json['code'];
+                      }
+                    }
+
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(err)));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMessage)),
+                    );
                   }
                 } catch (e) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('حدث خطأ أثناء الاتصال بالخادم')),
+                    SnackBar(
+                        content: Text('حدث خطأ في الاتصال: ${e.toString()}')),
                   );
                 } finally {
                   if (mounted) setState(() => _loading = false);

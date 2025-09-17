@@ -45,34 +45,72 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     super.dispose();
   }
 
+// في _sendOtp method، التحديث الكامل:
+
   void _sendOtp() async {
     if (!_formKey.currentState!.validate()) return;
 
     final phone = '+222${_phoneController.text.trim()}';
 
     setState(() => _loading = true);
-    final r = await AuthApi().pwdReset(phone: phone, lang: 'ar');
-    setState(() => _loading = false);
 
-    // ✅ جرّب اطبع الرد عشان تتأكد من المفتاح الصحيح
-    print(r);
+    try {
+      final r = await AuthApi().pwdReset(phone: phone, lang: 'ar');
 
-    if (r['ok'] == true || r['status'] == 'success') {
-      // 🔥 الانتقال مثل الكود القديم
-      Navigator.pushNamed(
-        context,
-        AppRoutes.otpVerify,
-        arguments: {
-          'flow': 'pwd', // ✅ أضيفي هذا المفتاح
-          'phone': phone, // موجود عندك
-          // إن كنتِ بحاجة لأمور أخرى للواجهة احتفظي بها:
-          'purpose': 'reset_password', // اختياري
-          'role': _role, // اختياري
-        },
+      if (r['ok'] == true) {
+        // نجح إرسال OTP
+        Navigator.pushNamed(
+          context,
+          AppRoutes.otpVerify,
+          arguments: {
+            'flow': 'pwd',
+            'phone': phone,
+            'purpose': 'reset_password',
+            'role': _role,
+          },
+        );
+      } else {
+        // فشل إرسال OTP
+        final json = r['json'] ?? {};
+        String errorMessage = 'تعذّر إرسال الرمز';
+
+        if (json['detail'] != null) {
+          if (json['detail'] is String) {
+            errorMessage = json['detail'];
+          } else if (json['detail'] is Map) {
+            final details = json['detail'] as Map;
+            if (details['phone'] != null) {
+              errorMessage = details['phone'][0];
+            } else if (details['non_field_errors'] != null) {
+              errorMessage = details['non_field_errors'][0];
+            }
+          }
+        } else if (json['code'] != null) {
+          switch (json['code']) {
+            case 'user_not_found':
+              errorMessage = 'هذا الرقم غير مسجل';
+              break;
+            case 'invalid_phone':
+              errorMessage = 'رقم الهاتف غير صالح';
+              break;
+            case 'rate_limited':
+              errorMessage = 'انتظر قليلاً قبل المحاولة مرة أخرى';
+              break;
+            default:
+              errorMessage = json['code'];
+          }
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ في الاتصال: ${e.toString()}')),
       );
-    } else {
-      final err = (r['json']?['detail'] ?? 'تعذّر إرسال الرمز').toString();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 

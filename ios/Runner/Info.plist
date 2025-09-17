@@ -45,5 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- >>> ADD: Location permissions for iOS -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>هذا التطبيق يحتاج للوصول لموقعك لإظهار الوظائف القريبة منك</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>هذا التطبيق يحتاج للوصول لموقعك لإظهار الوظائف القريبة منك</string>
+	<!-- <<< END ADD -->
 </dict>
 </plist>

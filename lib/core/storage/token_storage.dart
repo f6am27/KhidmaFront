@@ -1,29 +1,118 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TokenStorage {
-  static const _s = FlutterSecureStorage();
+  // للتوكنات الحساسة نستخدم Secure Storage
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: true,
+    ),
+  );
 
-  // مفاتيح موحّدة
-  static const _kAccess = 'access';
-  static const _kRefresh = 'refresh';
+  // باقي الكود يبقى كما هو...
 
-  /// حفظ التوكنات
-  static Future<void> save(String access, String refresh) async {
-    await _s.write(key: _kAccess, value: access);
-    await _s.write(key: _kRefresh, value: refresh);
+  // للبيانات غير الحساسة نستخدم SharedPreferences (أسرع)
+  static const String _accessKey = 'access_token';
+  static const String _refreshKey = 'refresh_token';
+  static const String _userKey = 'user_data';
+
+  /// حفظ JWT tokens بأمان
+  static Future<void> save(String accessToken, String refreshToken) async {
+    await Future.wait([
+      _secureStorage.write(key: _accessKey, value: accessToken),
+      _secureStorage.write(key: _refreshKey, value: refreshToken),
+    ]);
   }
 
-  /// القراءة — الأسماء الجديدة المتوقعة في auth_api.dart
-  static Future<String?> readAccess() => _s.read(key: _kAccess);
-  static Future<String?> readRefresh() => _s.read(key: _kRefresh);
+  /// قراءة Access Token
+  static Future<String?> readAccess() async {
+    try {
+      return await _secureStorage.read(key: _accessKey);
+    } catch (e) {
+      // في حالة خطأ في Secure Storage، نحذف البيانات ونرجع null
+      await _secureStorage.delete(key: _accessKey);
+      return null;
+    }
+  }
 
-  /// مرادفات (توافقًا مع الشيفرة القديمة)
-  static Future<String?> access() => readAccess();
-  static Future<String?> refresh() => readRefresh();
+  /// قراءة Refresh Token
+  static Future<String?> readRefresh() async {
+    try {
+      return await _secureStorage.read(key: _refreshKey);
+    } catch (e) {
+      await _secureStorage.delete(key: _refreshKey);
+      return null;
+    }
+  }
 
-  /// مسح التوكنات فقط (أفضل من deleteAll)
+  /// حفظ بيانات المستخدم (غير حساسة)
+  static Future<void> saveUserData(Map<String, dynamic> userData) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(userData));
+  }
+
+  /// قراءة بيانات المستخدم
+  static Future<Map<String, dynamic>?> readUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userDataStr = prefs.getString(_userKey);
+      if (userDataStr == null) return null;
+
+      return jsonDecode(userDataStr) as Map<String, dynamic>;
+    } catch (e) {
+      // في حالة خطأ، نحذف البيانات التالفة
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_userKey);
+      return null;
+    }
+  }
+
+  /// مسح جميع البيانات المحفوظة (تسجيل الخروج)
   static Future<void> clear() async {
-    await _s.delete(key: _kAccess);
-    await _s.delete(key: _kRefresh);
+    await Future.wait([
+      _secureStorage.delete(key: _accessKey),
+      _secureStorage.delete(key: _refreshKey),
+      SharedPreferences.getInstance().then((prefs) => prefs.remove(_userKey)),
+    ]);
+  }
+
+  /// مسح شامل (في حالة وجود مشاكل)
+  static Future<void> clearAll() async {
+    await Future.wait([
+      _secureStorage.deleteAll(),
+      SharedPreferences.getInstance().then((prefs) => prefs.clear()),
+    ]);
+  }
+
+  /// فحص ما إذا كان المستخدم مسجل دخول
+  static Future<bool> isLoggedIn() async {
+    final accessToken = await readAccess();
+    return accessToken != null && accessToken.isNotEmpty;
+  }
+
+  /// فحص صحة البيانات المحفوظة
+  static Future<bool> validateStoredData() async {
+    try {
+      final accessToken = await readAccess();
+      final userData = await readUserData();
+
+      return accessToken != null &&
+          accessToken.isNotEmpty &&
+          userData != null &&
+          userData.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// تنظيف البيانات في حالة الخطأ
+  static Future<void> handleStorageError() async {
+    try {
+      await clearAll();
+    } catch (e) {
+      // إذا فشل حتى المسح، نتجاهل الخطأ
+    }
   }
 }

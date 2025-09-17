@@ -10,7 +10,7 @@ class AuthApi {
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body, {
-    bool withAuth = false, // <<< NEW
+    bool withAuth = false,
   }) async {
     final uri = Uri.parse('$_base$path');
 
@@ -25,20 +25,31 @@ class AuthApi {
       }
     }
 
-    final res = await _client.post(
-      uri,
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    try {
+      final res = await _client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      );
 
-    Map<String, dynamic> json = {};
-    if (res.body.isNotEmpty) {
-      try {
-        json = jsonDecode(res.body) as Map<String, dynamic>;
-      } catch (_) {}
+      Map<String, dynamic> json = {};
+      if (res.body.isNotEmpty) {
+        try {
+          json = jsonDecode(res.body) as Map<String, dynamic>;
+        } catch (_) {
+          json = {'detail': 'Invalid response format'};
+        }
+      }
+
+      final ok = res.statusCode >= 200 && res.statusCode < 300;
+      return {'ok': ok, 'status': res.statusCode, 'json': json};
+    } catch (e) {
+      return {
+        'ok': false,
+        'status': 0,
+        'json': {'detail': 'Network error: ${e.toString()}'}
+      };
     }
-    final ok = res.statusCode >= 200 && res.statusCode < 300;
-    return {'ok': ok, 'status': res.statusCode, 'json': json};
   }
 
   // — التسجيل — //
@@ -49,7 +60,7 @@ class AuthApi {
     String lang = 'ar',
     String role = 'client',
   }) =>
-      _post('/register', {
+      _post('/register/', {
         'username': username,
         'phone': phone,
         'password': password,
@@ -61,33 +72,33 @@ class AuthApi {
     required String phone,
     String lang = 'ar',
   }) =>
-      _post('/resend', {'phone': phone, 'lang': lang});
+      _post('/resend/', {'phone': phone, 'lang': lang});
 
   Future<Map<String, dynamic>> verify({
     required String phone,
     required String code,
   }) =>
-      _post('/verify', {'phone': phone, 'code': code});
+      _post('/verify/', {'phone': phone, 'code': code});
 
   // — الدخول — //
   Future<Map<String, dynamic>> login({
     required String id,
     required String password,
   }) =>
-      _post('/login', {'phone_or_username': id, 'password': password});
+      _post('/login/', {'phone_or_username': id, 'password': password});
 
   // — استرجاع كلمة المرور — //
   Future<Map<String, dynamic>> pwdReset({
     required String phone,
     String lang = 'ar',
   }) =>
-      _post('/pwd/reset', {'phone': phone, 'lang': lang});
+      _post('/password/reset/', {'phone': phone, 'lang': lang});
 
   Future<Map<String, dynamic>> pwdResend({
     required String phone,
     String lang = 'ar',
   }) =>
-      _post('/pwd/resend', {'phone': phone, 'lang': lang});
+      _post('/password/resend/', {'phone': phone, 'lang': lang});
 
   Future<Map<String, dynamic>> pwdConfirm({
     required String phone,
@@ -95,7 +106,7 @@ class AuthApi {
     required String newPassword,
     required String newPasswordConfirm,
   }) =>
-      _post('/pwd/confirm', {
+      _post('/password/confirm/', {
         'phone': phone,
         'code': code,
         'new_password': newPassword,
@@ -104,5 +115,40 @@ class AuthApi {
 
   // — إتمام Onboarding للعامل — //
   Future<Map<String, dynamic>> completeWorkerOnboarding() =>
-      _post('/onboarding/complete', {}, withAuth: true); // <<< ONLY here
+      _post('/onboarding/complete/', {}, withAuth: true);
+
+  // — ملف المستخدم — //
+  Future<Map<String, dynamic>> getUserProfile() async {
+    final uri = Uri.parse('$_base/profile/');
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+
+    final access = await TokenStorage.readAccess();
+    if (access != null && access.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $access';
+    }
+
+    try {
+      final res = await _client.get(uri, headers: headers);
+
+      Map<String, dynamic> json = {};
+      if (res.body.isNotEmpty) {
+        try {
+          json = jsonDecode(res.body) as Map<String, dynamic>;
+        } catch (_) {
+          json = {'detail': 'Invalid response format'};
+        }
+      }
+
+      final ok = res.statusCode >= 200 && res.statusCode < 300;
+      return {'ok': ok, 'status': res.statusCode, 'json': json};
+    } catch (e) {
+      return {
+        'ok': false,
+        'status': 0,
+        'json': {'detail': 'Network error: ${e.toString()}'}
+      };
+    }
+  }
 }
