@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/colors.dart';
 import 'worker_opportunities_screen.dart';
 
@@ -10,11 +11,34 @@ class WorkerHomeScreen extends StatefulWidget {
 }
 
 class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
-  bool _isLocationEnabled = true;
+  bool _isLocationEnabled = false; // تغيير القيمة الافتراضية لـ false
   String _currentLocation = "Nouakchott";
   String _currentCountry = "Mauritanie";
   bool _isLocationLoading = false;
   String _workerName = "Omar Ba"; // اسم العامل - يمكن جلبه من قاعدة البيانات
+
+  @override
+  void initState() {
+    super.initState();
+    // تحميل حالة الموقع المحفوظة
+    _loadLocationState();
+  }
+
+  // تحميل حالة الموقع من SharedPreferences
+  void _loadLocationState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLocationState =
+          prefs.getBool('worker_location_enabled') ?? false;
+
+      setState(() {
+        _isLocationEnabled = savedLocationState;
+      });
+    } catch (e) {
+      print('Error loading location state: $e');
+      // في حالة الخطأ، نبقي القيمة الافتراضية false
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +240,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
+  // باقي الدوال بدون تغيير...
   Widget _buildWelcomeCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -814,13 +839,69 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
+  // تحديث دالة تبديل الموقع مع حفظ الحالة
   void _toggleLocation(bool value) async {
     setState(() => _isLocationLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    setState(() {
-      _isLocationEnabled = value;
-      _isLocationLoading = false;
-    });
+
+    try {
+      // حفظ الحالة الجديدة
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('worker_location_enabled', value);
+
+      // محاكاة تحميل (يمكن استبداله بطلب GPS حقيقي)
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      setState(() {
+        _isLocationEnabled = value;
+        _isLocationLoading = false;
+      });
+
+      // رسالة تأكيد
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                value ? Icons.location_on : Icons.location_off,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                value ? 'Position activée avec succès!' : 'Position désactivée',
+              ),
+            ],
+          ),
+          backgroundColor: value ? AppColors.green : AppColors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      // في حالة الخطأ
+      setState(() => _isLocationLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 12),
+              Text('Erreur lors de la mise à jour de la position'),
+            ],
+          ),
+          backgroundColor: AppColors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   void _showSearchOptions() {

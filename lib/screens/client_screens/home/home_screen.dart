@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'widgets/search_bar_widget.dart';
 import 'widgets/category_selector_widget.dart';
 import 'widgets/filter_options_widget.dart';
 import 'widgets/worker_card_widget.dart';
 import '../../../core/theme/theme_colors.dart';
 import 'widgets/all_services_screen.dart';
+import '../onboarding/client_location_permission_screen.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   static const Color primaryPurple = Color(0xFF6366F1);
@@ -26,6 +29,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   String ratingSort = 'none';
   String distanceSort = 'none';
   String selectedArea = 'Toutes Zones';
+
+  // Location states
+  LatLng? _clientLocation;
+  bool _isLocationLoading = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -70,81 +77,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     'El Houde Ech Chargui'
   ];
 
-  final List<Map<String, dynamic>> allServices = [
-    {
-      'icon': Icons.cleaning_services,
-      'name': 'Nettoyage Maison',
-      'category': 'Nettoyage Maison'
-    },
-    {
-      'icon': Icons.build,
-      'name': 'Réparation Électroménager',
-      'category': 'Réparation Électroménager'
-    },
-    {'icon': Icons.plumbing, 'name': 'Plomberie', 'category': 'Plomberie'},
-    {
-      'icon': Icons.local_shipping,
-      'name': 'Déménagement',
-      'category': 'Déménagement'
-    },
-    {
-      'icon': Icons.electrical_services,
-      'name': 'Électricité',
-      'category': 'Électricité'
-    },
-    {'icon': Icons.format_paint, 'name': 'Peinture', 'category': 'Peinture'},
-    {'icon': Icons.carpenter, 'name': 'Menuiserie', 'category': 'Menuiserie'},
-    {'icon': Icons.grass, 'name': 'Jardinage', 'category': 'Jardinage'},
-    {
-      'icon': Icons.car_repair,
-      'name': 'Lavage Auto',
-      'category': 'Lavage Auto'
-    },
-    {
-      'icon': Icons.pest_control,
-      'name': 'Lutte Antiparasitaire',
-      'category': 'Lutte Antiparasitaire'
-    },
-    {
-      'icon': Icons.security,
-      'name': 'Services Sécurité',
-      'category': 'Services Sécurité'
-    },
-    {
-      'icon': Icons.photo_camera,
-      'name': 'Photographie',
-      'category': 'Photographie'
-    },
-    {'icon': Icons.cake, 'name': 'Traiteur', 'category': 'Traiteur'},
-    {
-      'icon': Icons.fitness_center,
-      'name': 'Entraîneur Personnel',
-      'category': 'Entraîneur Personnel'
-    },
-    {
-      'icon': Icons.school,
-      'name': 'Cours Particuliers',
-      'category': 'Cours Particuliers'
-    },
-    {'icon': Icons.pets, 'name': 'Soins Animaux', 'category': 'Soins Animaux'},
-    {'icon': Icons.cut, 'name': 'Beauté & Salon', 'category': 'Beauté & Salon'},
-    {
-      'icon': Icons.computer,
-      'name': 'Support Informatique',
-      'category': 'Support Informatique'
-    },
-    {
-      'icon': Icons.medical_services,
-      'name': 'Soins de Santé',
-      'category': 'Soins de Santé'
-    },
-    {
-      'icon': Icons.local_laundry_service,
-      'name': 'Blanchisserie',
-      'category': 'Blanchisserie'
-    },
-  ];
-
+  // بيانات العمال مع إحداثيات GPS
   List<Map<String, dynamic>> topWorkers = [
     {
       'name': 'CrispCloth',
@@ -159,6 +92,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': false,
       'area': 'Tevragh Zeina',
       'phone': '+222 12345678',
+      'coordinates': LatLng(18.0856, -15.9785),
+      'calculatedDistance': null,
     },
     {
       'name': 'Squeaky Clean',
@@ -173,6 +108,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': true,
       'area': 'Riad',
       'phone': '+222 87654321',
+      'coordinates': LatLng(18.0742, -15.9345),
+      'calculatedDistance': null,
     },
     {
       'name': 'PureCare Laundry',
@@ -187,6 +124,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': false,
       'area': 'Dar Naim',
       'phone': '+222 11223344',
+      'coordinates': LatLng(18.0892, -15.9234),
+      'calculatedDistance': null,
     },
     {
       'name': 'Ahmed ElKhadem',
@@ -201,6 +140,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': true,
       'area': 'Tojounin',
       'phone': '+222 55667788',
+      'coordinates': LatLng(18.0423, -15.9876),
+      'calculatedDistance': null,
     },
     {
       'name': 'Omar Fixing',
@@ -215,6 +156,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': false,
       'area': 'Arafat',
       'phone': '+222 99887766',
+      'coordinates': LatLng(18.0567, -15.9712),
+      'calculatedDistance': null,
     },
     {
       'name': 'Clean House Pro',
@@ -229,8 +172,152 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       'isFavorite': false,
       'area': 'Port',
       'phone': '+222 44556677',
+      'coordinates': LatLng(18.0868, -15.9560),
+      'calculatedDistance': null,
     },
   ];
+
+  /// طلب إذن الموقع باستخدام الواجهة المخصصة
+  Future<void> _requestLocationAndCalculateDistances() async {
+    // الخطوة 1: عرض الواجهة المخصصة أولاً
+    final bool? userConsent =
+        await ClientLocationPermissionScreen.showWhenNeeded(context);
+
+    if (userConsent != true) {
+      // رفض المستخدم → إلغاء العملية مع رسالة توضيحية
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('يجب السماح بالوصول للموقع لإظهار العمال الأقرب إليك'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    // الخطوة 2: موافقة المستخدم → بدء التحميل
+    setState(() {
+      _isLocationLoading = true;
+    });
+
+    try {
+      // التحقق من حالة خدمة الموقع
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showLocationServiceDialog();
+        setState(() {
+          _isLocationLoading = false;
+        });
+        return;
+      }
+
+      // الخطوة 3: طلب إذن النظام
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showPermissionDeniedDialog();
+          setState(() {
+            _isLocationLoading = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showPermissionDeniedForeverDialog();
+        setState(() {
+          _isLocationLoading = false;
+        });
+        return;
+      }
+
+      // الخطوة 4: الحصول على الموقع
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 30),
+      );
+
+      _clientLocation = LatLng(position.latitude, position.longitude);
+
+      // الخطوة 5: حساب المسافات
+      _calculateDistancesForWorkers();
+
+      // الخطوة 6: تفعيل فلتر المسافة وتحديث الواجهة
+      setState(() {
+        distanceSort = 'asc';
+        priceSort = 'none';
+        ratingSort = 'none';
+        _isLocationLoading = false;
+      });
+
+      // رسالة نجاح
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم تحديد موقعك وترتيب العمال حسب المسافة'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      _showLocationErrorDialog();
+      setState(() {
+        _isLocationLoading = false;
+      });
+    }
+  }
+
+  /// حساب المسافات للعمال
+  void _calculateDistancesForWorkers() {
+    if (_clientLocation == null) return;
+
+    for (var worker in topWorkers) {
+      double distanceKm = Geolocator.distanceBetween(
+            _clientLocation!.latitude,
+            _clientLocation!.longitude,
+            worker['coordinates'].latitude,
+            worker['coordinates'].longitude,
+          ) /
+          1000;
+
+      worker['calculatedDistance'] = distanceKm;
+      worker['distance'] = distanceKm < 1
+          ? '${(distanceKm * 1000).round()} m'
+          : '${distanceKm.toStringAsFixed(1)} km';
+    }
+  }
+
+  /// معالجة فلتر "الأقرب لي"
+  void _handleClosestFilter() {
+    if (distanceSort == 'asc' && _clientLocation != null) {
+      // إذا كان مفعل، قم بإلغائه
+      setState(() {
+        distanceSort = 'none';
+      });
+    } else {
+      // إذا لم يكن مفعل، اطلب الموقع
+      _requestLocationAndCalculateDistances();
+    }
+  }
+
+  void _onFilterChanged(Map<String, String> filters) {
+    setState(() {
+      priceSort = filters['priceSort']!;
+      ratingSort = filters['ratingSort']!;
+      distanceSort = filters['distanceSort']!;
+      selectedArea = filters['selectedArea']!;
+    });
+
+    // إذا تم اختيار فلتر المسافة ولا يوجد موقع
+    if (distanceSort == 'asc' && _clientLocation == null) {
+      _requestLocationAndCalculateDistances();
+    }
+  }
 
   List<Map<String, dynamic>> get filteredWorkers {
     List<Map<String, dynamic>> filtered = List.from(topWorkers);
@@ -260,6 +347,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           filtered.where((worker) => worker['area'] == selectedArea).toList();
     }
 
+    // ترتيب النتائج
     if (priceSort != 'none') {
       if (priceSort == 'asc') {
         filtered.sort((a, b) => a['minPrice'].compareTo(b['minPrice']));
@@ -272,15 +360,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       } else {
         filtered.sort((a, b) => a['rating'].compareTo(b['rating']));
       }
-    } else if (distanceSort != 'none') {
+    } else if (distanceSort != 'none' && _clientLocation != null) {
+      // ترتيب حسب المسافة المحسوبة
       if (distanceSort == 'asc') {
-        filtered.sort((a, b) =>
-            double.parse(a['distance'].replaceAll(' km', ''))
-                .compareTo(double.parse(b['distance'].replaceAll(' km', ''))));
+        filtered.sort((a, b) => (a['calculatedDistance'] ?? double.infinity)
+            .compareTo(b['calculatedDistance'] ?? double.infinity));
       } else {
-        filtered.sort((a, b) =>
-            double.parse(b['distance'].replaceAll(' km', ''))
-                .compareTo(double.parse(a['distance'].replaceAll(' km', ''))));
+        filtered.sort((a, b) => (b['calculatedDistance'] ?? 0.0)
+            .compareTo(a['calculatedDistance'] ?? 0.0));
       }
     }
 
@@ -305,6 +392,78 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       showSearchResults = true;
       isSearchActive = true;
     });
+  }
+
+  // نوافذ الحوار للأخطاء
+  void _showLocationServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('خدمة الموقع غير مفعلة'),
+        content: Text('يرجى تفعيل خدمة الموقع من إعدادات الجهاز'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('إذن الموقع مطلوب'),
+        content: Text('يرجى السماح بالوصول للموقع لترتيب العمال حسب المسافة'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPermissionDeniedForeverDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('إذن الموقع مرفوض نهائياً'),
+        content: Text('يرجى تفعيل إذن الموقع من إعدادات التطبيق'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Geolocator.openAppSettings();
+            },
+            child: Text('الإعدادات'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLocationErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('خطأ في الموقع'),
+        content: Text('حدث خطأ أثناء الحصول على موقعك. يرجى المحاولة مرة أخرى'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showFiltersDropdown() {
@@ -351,93 +510,49 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Prix
-                      _buildCleanFilterItem(
-                        'Prix',
-                        priceSort,
-                        () {
-                          setState(() {
-                            if (priceSort == 'none') {
-                              priceSort = 'asc';
-                            } else if (priceSort == 'asc') {
-                              priceSort = 'desc';
-                            } else {
-                              priceSort = 'none';
-                            }
-                            ratingSort = 'none';
-                            distanceSort = 'none';
-                          });
-                          Navigator.pop(context);
-                        },
-                      ),
-
-                      _buildDivider(),
-
-                      // Note
-                      _buildCleanFilterItem(
-                        'Note',
-                        ratingSort,
-                        () {
-                          setState(() {
-                            if (ratingSort == 'none') {
-                              ratingSort = 'desc';
-                            } else if (ratingSort == 'desc') {
-                              ratingSort = 'asc';
-                            } else {
-                              ratingSort = 'none';
-                            }
+                      _buildCleanFilterItem('Prix', priceSort, () {
+                        setState(() {
+                          if (priceSort == 'none') {
+                            priceSort = 'asc';
+                          } else if (priceSort == 'asc') {
+                            priceSort = 'desc';
+                          } else {
                             priceSort = 'none';
-                            distanceSort = 'none';
-                          });
-                          Navigator.pop(context);
-                        },
-                      ),
-
+                          }
+                          ratingSort = 'none';
+                          distanceSort = 'none';
+                        });
+                        Navigator.pop(context);
+                      }),
                       _buildDivider(),
-
-                      // Distance
-                      _buildCleanFilterItem(
-                        'Distance',
-                        distanceSort,
-                        () {
-                          setState(() {
-                            if (distanceSort == 'none') {
-                              distanceSort = 'asc';
-                            } else if (distanceSort == 'asc') {
-                              distanceSort = 'desc';
-                            } else {
-                              distanceSort = 'none';
-                            }
-                            priceSort = 'none';
+                      _buildCleanFilterItem('Note', ratingSort, () {
+                        setState(() {
+                          if (ratingSort == 'none') {
+                            ratingSort = 'desc';
+                          } else if (ratingSort == 'desc') {
+                            ratingSort = 'asc';
+                          } else {
                             ratingSort = 'none';
-                          });
-                          Navigator.pop(context);
-                        },
-                      ),
-
+                          }
+                          priceSort = 'none';
+                          distanceSort = 'none';
+                        });
+                        Navigator.pop(context);
+                      }),
                       _buildDivider(),
-
-                      // Zone géographique
-                      _buildCleanFilterItem(
-                        'Zone géographique',
-                        selectedArea != 'Toutes Zones' ? 'active' : 'none',
-                        () {
-                          Navigator.pop(context);
-                          _showAreaSelection();
-                        },
-                      ),
-
+                      _buildDistanceFilterItem(),
                       _buildDivider(),
-
-                      // Réinitialiser
-                      _buildCleanFilterItem(
-                        'Réinitialiser',
-                        'reset',
-                        () {
-                          _resetFilters();
-                          Navigator.pop(context);
-                        },
-                      ),
+                      _buildCleanFilterItem('Zone géographique',
+                          selectedArea != 'Toutes Zones' ? 'active' : 'none',
+                          () {
+                        Navigator.pop(context);
+                        _showAreaSelection();
+                      }),
+                      _buildDivider(),
+                      _buildCleanFilterItem('Réinitialiser', 'reset', () {
+                        _resetFilters();
+                        Navigator.pop(context);
+                      }),
                     ],
                   ),
                 ),
@@ -446,6 +561,76 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildDistanceFilterItem() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Color textColor;
+    String suffix = '';
+
+    if (distanceSort == 'asc') {
+      textColor = ThemeColors.primaryColor;
+      suffix = ' ↑';
+    } else if (distanceSort == 'desc') {
+      textColor = ThemeColors.primaryColor;
+      suffix = ' ↓';
+    } else {
+      textColor =
+          isDark ? ThemeColors.darkTextPrimary : ThemeColors.lightTextPrimary;
+    }
+
+    return GestureDetector(
+      onTap: _isLocationLoading
+          ? null
+          : () {
+              Navigator.pop(context);
+              _handleClosestFilter();
+            },
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: distanceSort != 'none'
+              ? ThemeColors.primaryColor.withOpacity(0.05)
+              : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            if (_isLocationLoading) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Localisation...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: ThemeColors.primaryColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ] else ...[
+              Text(
+                'Distance$suffix',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: textColor,
+                  fontWeight: distanceSort != 'none'
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -539,10 +724,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                     ),
                   ),
                   trailing: selectedArea == area
-                      ? Icon(
-                          Icons.check,
-                          color: ThemeColors.primaryColor,
-                        )
+                      ? Icon(Icons.check, color: ThemeColors.primaryColor)
                       : null,
                   onTap: () {
                     setState(() {
@@ -566,6 +748,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       distanceSort = 'none';
       selectedArea = 'Toutes Zones';
       selectedCategory = 'Toutes Catégories';
+      _clientLocation = null;
     });
   }
 
@@ -621,11 +804,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               _buildHeader(isDark),
               SizedBox(height: 24),
-
-              // Search Bar Widget مع زر الفلتر منفصل
               SearchBarWidget(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
@@ -645,28 +825,19 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 },
               ),
               SizedBox(height: 16),
-
-              // Category Selector Widget
               if (isSearchActive)
                 CategorySelectorWidget(
                   categories: categories,
                   selectedCategory: selectedCategory,
                   onCategorySelected: _onCategorySelected,
                 ),
-
               SizedBox(height: 32),
-
-              // Categories section
               if (!isSearchActive) ...[
                 _buildCategoriesSection(isDark),
                 SizedBox(height: 32),
               ],
-
-              // Results section
               _buildResultsSection(isDark),
               SizedBox(height: 16),
-
-              // Workers list
               if (filteredWorkers.isEmpty)
                 _buildEmptyState(isDark)
               else
@@ -847,21 +1018,13 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  void _navigateToNotifications(BuildContext context) {
-    print('Navigating to notifications page');
-  }
-
   void _makePhoneCall(String phone) {
     print('Calling: $phone');
-    // يمكنك هنا إضافة كود للاتصال باستخدام url_launcher
   }
 
   void _openChat(Map<String, dynamic> worker) {
     print('Opening chat with: ${worker['name']}');
-    // يمكنك هنا الانتقال إلى صفحة المحادثة
   }
-
-// في كود home_screen الخاص بك، عليك تعديل الدالة _showAllServices كما يلي:
 
   void _showAllServices(BuildContext context) {
     Navigator.push(

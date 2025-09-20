@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
 import 'task_candidates.dart'; // استيراد صفحة المتقدمين
 import 'create_task.dart'; // استيراد صفحة إنشاء المهمة
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class TasksScreen extends StatefulWidget {
   @override
@@ -751,6 +752,8 @@ class TaskModel {
   final String? assignedProvider;
   final int? providerRating;
   final int applicantsCount;
+  final bool isUrgent; // ← إضافة هذا السطر
+  final LatLng? coordinates;
 
   TaskModel({
     required this.id,
@@ -765,5 +768,7 @@ class TaskModel {
     this.assignedProvider,
     this.providerRating,
     required this.applicantsCount,
+    this.isUrgent = false, // ← القيمة الافتراضية
+    this.coordinates,
   });
 }

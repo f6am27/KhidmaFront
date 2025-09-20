@@ -1,0 +1,452 @@
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import '../../../core/theme/theme_colors.dart';
+
+class LocationPickerScreen extends StatefulWidget {
+  const LocationPickerScreen({Key? key}) : super(key: key);
+
+  @override
+  _LocationPickerScreenState createState() => _LocationPickerScreenState();
+}
+
+class _LocationPickerScreenState extends State<LocationPickerScreen> {
+  GoogleMapController? _mapController;
+  LatLng? _selectedLocation;
+  String _currentAddress = 'Recherche de votre position...';
+  bool _isLoadingLocation = true;
+  bool _isLoadingAddress = false;
+
+  // نواكشوط كموقع افتراضي
+  static const LatLng _nouakchottCenter = LatLng(18.0735, -15.9582);
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      setState(() {
+        _isLoadingLocation = true;
+        _currentAddress = 'Recherche de votre position...';
+      });
+
+      // التحقق من الأذونات
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+
+      // الحصول على الموقع الحالي
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 120),
+      );
+
+      final LatLng currentLocation =
+          LatLng(position.latitude, position.longitude);
+
+      setState(() {
+        _selectedLocation = currentLocation;
+        _isLoadingLocation = false;
+      });
+
+      // تحريك الكاميرا للموقع الحالي
+      if (_mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(currentLocation, 16.0),
+        );
+      }
+
+      // الحصول على العنوان
+      await _getAddressFromLatLng(currentLocation);
+    } catch (e) {
+      print('Error getting location: $e');
+      // في حالة الفشل، استخدام نواكشوط كموقع افتراضي
+      setState(() {
+        _selectedLocation = _nouakchottCenter;
+        _isLoadingLocation = false;
+        _currentAddress = 'Nouakchott, Mauritanie';
+      });
+
+      if (_mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(_nouakchottCenter, 12.0),
+        );
+      }
+    }
+  }
+
+  Future<void> _getAddressFromLatLng(LatLng location) async {
+    try {
+      setState(() => _isLoadingAddress = true);
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude,
+        location.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        String address = '';
+
+        if (place.street != null && place.street!.isNotEmpty) {
+          address += '${place.street}, ';
+        }
+        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+          address += '${place.subLocality}, ';
+        }
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          address += place.locality!;
+        } else {
+          address += 'Nouakchott';
+        }
+
+        setState(() {
+          _currentAddress =
+              address.isNotEmpty ? address : 'Nouakchott, Mauritanie';
+          _isLoadingAddress = false;
+        });
+      }
+    } catch (e) {
+      print('Error getting address: $e');
+      setState(() {
+        _currentAddress = 'Adresse non disponible';
+        _isLoadingAddress = false;
+      });
+    }
+  }
+
+  void _onMapTap(LatLng location) {
+    setState(() {
+      _selectedLocation = location;
+    });
+    _getAddressFromLatLng(location);
+  }
+
+  void _onMyLocationButtonPressed() {
+    _getCurrentLocation();
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permission requise'),
+        content: Text(
+          'L\'accès à la localisation est nécessaire pour sélectionner votre position. '
+          'Veuillez activer la localisation dans les paramètres.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context, null);
+            },
+            child: Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Geolocator.openAppSettings();
+            },
+            child: Text('Paramètres'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? ThemeColors.darkBackground : Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child:
+                Icon(Icons.arrow_back_ios_new, size: 18, color: Colors.black87),
+          ),
+          onPressed: () => Navigator.pop(context, null),
+        ),
+        title: Text(
+          'Choisir la position',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          // Google Map
+          GoogleMap(
+            onMapCreated: (GoogleMapController controller) {
+              _mapController = controller;
+
+              // إذا كان لدينا موقع محدد، انتقل إليه
+              if (_selectedLocation != null) {
+                controller.animateCamera(
+                  CameraUpdate.newLatLngZoom(_selectedLocation!, 16.0),
+                );
+              }
+            },
+            initialCameraPosition: CameraPosition(
+              target: _selectedLocation ?? _nouakchottCenter,
+              zoom: _selectedLocation != null ? 16.0 : 12.0,
+            ),
+            onTap: _onMapTap,
+            markers: _selectedLocation != null
+                ? {
+                    Marker(
+                      markerId: MarkerId('selected_location'),
+                      position: _selectedLocation!,
+                      draggable: true,
+                      onDragEnd: (LatLng newPosition) {
+                        setState(() {
+                          _selectedLocation = newPosition;
+                        });
+                        _getAddressFromLatLng(newPosition);
+                      },
+                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                        BitmapDescriptor.hueBlue,
+                      ),
+                    ),
+                  }
+                : {},
+            myLocationEnabled: false,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+          ),
+
+          // Loading overlay
+          if (_isLoadingLocation)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Localisation en cours...',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Address card at top
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        color: ThemeColors.primaryColor,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Position sélectionnée',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  _isLoadingAddress
+                      ? Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(
+                                    ThemeColors.primaryColor),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Recherche de l\'adresse...'),
+                          ],
+                        )
+                      : Text(
+                          _currentAddress,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black87,
+                          ),
+                        ),
+                ],
+              ),
+            ),
+          ),
+
+          // My location button
+          Positioned(
+            bottom: 180,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _onMyLocationButtonPressed,
+              backgroundColor: ThemeColors.primaryColor,
+              child: _isLoadingLocation
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : Icon(Icons.my_location, color: Colors.white),
+              mini: true,
+            ),
+          ),
+
+          // Instructions
+          Positioned(
+            bottom: 120,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Appuyez sur la carte ou faites glisser le marqueur pour ajuster',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Confirm button
+          Positioned(
+            bottom: 16,
+            left: 16,
+            right: 16,
+            child: ElevatedButton(
+              onPressed: _selectedLocation != null ? _confirmLocation : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Confirmer cette position',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmLocation() {
+    if (_selectedLocation != null) {
+      // إرجاع البيانات للشاشة السابقة
+      Navigator.pop(context, {
+        'coordinates': _selectedLocation,
+        'address': _currentAddress,
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+}

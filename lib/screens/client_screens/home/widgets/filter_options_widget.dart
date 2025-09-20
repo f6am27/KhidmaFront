@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/theme_colors.dart'; // تأكد من المسار
+import '../../../../core/theme/theme_colors.dart';
 
 class FilterOptionsWidget extends StatelessWidget {
   final String priceSort;
@@ -8,6 +8,8 @@ class FilterOptionsWidget extends StatelessWidget {
   final String selectedArea;
   final List<String> nouakchottAreas;
   final Function(Map<String, String>) onFilterChanged;
+  final bool isLocationLoading;
+  final bool hasClientLocation;
 
   const FilterOptionsWidget({
     Key? key,
@@ -17,6 +19,8 @@ class FilterOptionsWidget extends StatelessWidget {
     required this.selectedArea,
     required this.nouakchottAreas,
     required this.onFilterChanged,
+    this.isLocationLoading = false,
+    this.hasClientLocation = false,
   }) : super(key: key);
 
   @override
@@ -61,20 +65,35 @@ class FilterOptionsWidget extends StatelessWidget {
     );
   }
 
+  /// بناء فلتر "الأقرب لي" مع معالجة طلب الموقع
   Widget _buildClosestChip(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bool isActive = distanceSort == 'asc';
 
     return GestureDetector(
-      onTap: () {
-        Map<String, String> newFilters = {
-          'priceSort': 'none',
-          'ratingSort': 'none',
-          'distanceSort': isActive ? 'none' : 'asc',
-          'selectedArea': selectedArea,
-        };
-        onFilterChanged(newFilters);
-      },
+      onTap: isLocationLoading
+          ? null
+          : () {
+              if (isActive && hasClientLocation) {
+                // إذا كان مفعل ولدينا موقع، قم بإلغائه
+                Map<String, String> newFilters = {
+                  'priceSort': 'none',
+                  'ratingSort': 'none',
+                  'distanceSort': 'none',
+                  'selectedArea': selectedArea,
+                };
+                onFilterChanged(newFilters);
+              } else {
+                // إذا لم يكن مفعل أو لا يوجد موقع، فعّله (سيطلب الموقع في HomeScreen)
+                Map<String, String> newFilters = {
+                  'priceSort': 'none',
+                  'ratingSort': 'none',
+                  'distanceSort': 'asc',
+                  'selectedArea': selectedArea,
+                };
+                onFilterChanged(newFilters);
+              }
+            },
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -100,24 +119,54 @@ class FilterOptionsWidget extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.near_me,
-              size: 16,
-              color: isActive
-                  ? Colors.white
-                  : (isDark ? ThemeColors.darkTextSecondary : Colors.grey[600]),
-            ),
-            SizedBox(width: 6),
-            Text(
-              'Le plus proche',
-              style: TextStyle(
+            if (isLocationLoading) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(
+                    isActive ? Colors.white : ThemeColors.primaryColor,
+                  ),
+                ),
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Localisation...',
+                style: TextStyle(
+                  color: isActive
+                      ? Colors.white
+                      : (isDark
+                          ? ThemeColors.darkTextPrimary
+                          : Colors.grey[700]),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ] else ...[
+              Icon(
+                hasClientLocation ? Icons.near_me : Icons.location_searching,
+                size: 16,
                 color: isActive
                     ? Colors.white
-                    : (isDark ? ThemeColors.darkTextPrimary : Colors.grey[700]),
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
+                    : (isDark
+                        ? ThemeColors.darkTextSecondary
+                        : Colors.grey[600]),
               ),
-            ),
+              SizedBox(width: 6),
+              Text(
+                'Le plus proche',
+                style: TextStyle(
+                  color: isActive
+                      ? Colors.white
+                      : (isDark
+                          ? ThemeColors.darkTextPrimary
+                          : Colors.grey[700]),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -386,17 +435,24 @@ class FilterOptionsWidget extends StatelessWidget {
                 onFilterChanged(filters);
                 Navigator.pop(context);
               }),
-              _buildSortOption(context, 'Distance croissante (le plus proche)',
-                  distanceSort == 'asc', () {
-                Map<String, String> filters = {
-                  'priceSort': 'none',
-                  'ratingSort': 'none',
-                  'distanceSort': 'asc',
-                  'selectedArea': selectedArea,
-                };
-                onFilterChanged(filters);
-                Navigator.pop(context);
-              }),
+              _buildSortOption(
+                context,
+                'Distance croissante (le plus proche)',
+                distanceSort == 'asc',
+                isLocationLoading
+                    ? null
+                    : () {
+                        Map<String, String> filters = {
+                          'priceSort': 'none',
+                          'ratingSort': 'none',
+                          'distanceSort': 'asc',
+                          'selectedArea': selectedArea,
+                        };
+                        onFilterChanged(filters);
+                        Navigator.pop(context);
+                      },
+                showLocationIndicator: isLocationLoading,
+              ),
               _buildSortOption(context, 'Réinitialiser', false, () {
                 Map<String, String> filters = {
                   'priceSort': 'none',
@@ -415,7 +471,12 @@ class FilterOptionsWidget extends StatelessWidget {
   }
 
   Widget _buildSortOption(
-      BuildContext context, String title, bool isSelected, VoidCallback onTap) {
+    BuildContext context,
+    String title,
+    bool isSelected,
+    VoidCallback? onTap, {
+    bool showLocationIndicator = false,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -424,25 +485,49 @@ class FilterOptionsWidget extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
-            Icon(
-              isSelected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color: isSelected
-                  ? ThemeColors.primaryColor
-                  : (isDark ? ThemeColors.darkTextSecondary : Colors.grey[400]),
-            ),
-            SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            if (showLocationIndicator) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Obtention de la position...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: ThemeColors.primaryColor,
+                ),
+              ),
+            ] else ...[
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
                 color: isSelected
                     ? ThemeColors.primaryColor
-                    : (isDark ? ThemeColors.darkTextPrimary : Colors.grey[700]),
+                    : (isDark
+                        ? ThemeColors.darkTextSecondary
+                        : Colors.grey[400]),
               ),
-            ),
+              SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? ThemeColors.primaryColor
+                      : (isDark
+                          ? ThemeColors.darkTextPrimary
+                          : Colors.grey[700]),
+                ),
+              ),
+            ],
           ],
         ),
       ),
