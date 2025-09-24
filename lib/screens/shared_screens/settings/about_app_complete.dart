@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../core/theme/theme_colors.dart';
+import '../../../core/theme/theme_colors.dart';
 
 class AboutAppCompleteScreen extends StatelessWidget {
   @override

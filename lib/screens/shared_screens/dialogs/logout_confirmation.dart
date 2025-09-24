@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/theme_colors.dart'; // تأكد من المسار
+import '../../../core/theme/theme_colors.dart'; // تأكد من المسار
 
 class LogoutConfirmation extends StatelessWidget {
   final VoidCallback? onConfirm;

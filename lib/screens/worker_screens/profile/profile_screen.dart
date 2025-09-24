@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/theme/theme_colors.dart';
-import 'widgets/logout_confirmation.dart';
-import 'widgets/change_password.dart';
 import 'widgets/profile_edit.dart';
 import 'widgets/notification.dart';
-import 'widgets/language.dart';
-import 'widgets/support.dart';
+import '../../shared_screens/dialogs/logout_confirmation.dart';
+import '../../shared_screens/settings/change_password.dart';
+import '../../shared_screens/settings/language.dart';
+import '../../shared_screens/settings/support.dart';
 import 'widgets/reviews_ratings.dart';
 import 'widgets/payment_history.dart';
 

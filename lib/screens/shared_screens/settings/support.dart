@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/theme_colors.dart';
+import '../../../core/theme/theme_colors.dart';
 import 'terms_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'about_app_complete.dart';
