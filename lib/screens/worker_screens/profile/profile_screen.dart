@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../models/models.dart';
+import '../../../services/profile_service.dart';
 import 'widgets/profile_edit.dart';
 import 'widgets/notification.dart';
 import '../../shared_screens/dialogs/logout_confirmation.dart';
@@ -11,7 +13,79 @@ import '../../shared_screens/settings/support.dart';
 import 'widgets/reviews_ratings.dart';
 import 'widgets/payment_history.dart';
 
-class WorkerProfileScreen extends StatelessWidget {
+class WorkerProfileScreen extends StatefulWidget {
+  @override
+  _WorkerProfileScreenState createState() => _WorkerProfileScreenState();
+}
+
+class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
+  final ProfileService _profileService = ProfileService();
+
+  bool _isLoading = true;
+  WorkerProfile? _workerProfile;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWorkerProfile();
+  }
+
+  Future<void> _loadWorkerProfile() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final result = await _profileService.getWorkerProfile();
+      // إضافة هذا للـ debugging
+      print('=== DEBUG Profile Result ===');
+      print('OK: ${result['ok']}');
+      print('Full JSON: ${result['json']}');
+      print('WorkerProfile: ${result['workerProfile']}');
+      print('========================');
+
+      if (result['ok'] == true) {
+        setState(() {
+          _workerProfile = result['workerProfile'] as WorkerProfile;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage =
+              result['error'] ?? 'Erreur lors du chargement du profil';
+          _isLoading = false;
+        });
+
+        if (result['needsLogin'] == true) {
+          _showError('Session expirée, veuillez vous reconnecter');
+          // TODO: Navigate to login screen
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur réseau: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    await _loadWorkerProfile();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ThemeColors.errorColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,57 +102,201 @@ class WorkerProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? _buildLoadingState()
+          : _errorMessage.isNotEmpty
+              ? _buildErrorState()
+              : _buildProfileContent(),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: ThemeColors.primaryColor),
+          SizedBox(height: 16),
+          Text(
+            'Chargement du profil...',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: ThemeColors.errorColor,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Erreur de chargement',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            SizedBox(height: 8),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _refreshProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Réessayer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshProfile,
+      color: ThemeColors.primaryColor,
+      child: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
             SizedBox(height: 20),
 
             // صورة البروفايل
-            CircleAvatar(
-              radius: 50,
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkSurface
-                  : Colors.grey[200],
-              child: Icon(
-                Icons.person,
-                size: 60,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? ThemeColors.darkTextSecondary
-                    : Colors.grey[600],
-              ),
-            ),
+            _buildProfilePhoto(),
             SizedBox(height: 16),
 
             // الاسم والمعلومات
-            Text(
-              'Omar Ba',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Plombier • Électricien',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: ThemeColors.primaryColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Prestataire depuis Mars 2024',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            _buildProfileInfo(),
             SizedBox(height: 30),
 
-            // الإحصائيات السريعة - مختلفة عن العميل
+            // الإحصائيات السريعة
             _buildQuickStats(context),
             SizedBox(height: 30),
 
-            // القائمة الرئيسية - مختلفة عن العميل
+            // القائمة الرئيسية
             _buildMainMenu(context),
             SizedBox(height: 40),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProfilePhoto() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return CircleAvatar(
+      radius: 50,
+      backgroundColor: isDark ? ThemeColors.darkSurface : Colors.grey[200],
+      backgroundImage: _workerProfile?.profileImageUrl != null
+          ? NetworkImage(_workerProfile!.profileImageUrl!)
+          : null,
+      child: _workerProfile?.profileImageUrl == null
+          ? Icon(
+              Icons.person,
+              size: 60,
+              color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+            )
+          : null,
+    );
+  }
+
+  Widget _buildProfileInfo() {
+    if (_workerProfile == null) return SizedBox.shrink();
+
+    return Column(
+      children: [
+        // الاسم
+        Text(
+          _workerProfile!.fullName,
+          style: Theme.of(context).textTheme.displaySmall,
+        ),
+        SizedBox(height: 4),
+
+        // المعلومات المهنية
+        Text(
+          _workerProfile!.serviceCategory,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: ThemeColors.primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+        SizedBox(height: 4),
+
+        // عضو منذ
+        Text(
+          'Prestataire depuis ${_workerProfile!.memberSince}',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+
+        // المنطقة
+        if (_workerProfile!.serviceArea.isNotEmpty) ...[
+          SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: Colors.grey[600],
+              ),
+              SizedBox(width: 4),
+              Text(
+                _workerProfile!.serviceArea,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+            ],
+          ),
+        ],
+
+        // حالة الاتصال
+        if (_workerProfile!.isOnline) ...[
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'En ligne',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -101,10 +319,17 @@ class WorkerProfileScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _buildStatItem(context, '4.8', 'Note\nMoyenne', Icons.star_outline),
+          _buildStatItem(
+              context,
+              _workerProfile?.averageRating.toStringAsFixed(1) ?? '0.0',
+              'Note\nMoyenne',
+              Icons.star_outline),
           _buildDivider(context),
           _buildStatItem(
-              context, '23', 'Missions\nTerminées', Icons.check_circle_outline),
+              context,
+              _workerProfile?.totalJobsCompleted.toString() ?? '0',
+              'Missions\nTerminées',
+              Icons.check_circle_outline),
         ],
       ),
     );
@@ -288,17 +513,23 @@ class WorkerProfileScreen extends StatelessWidget {
     );
   }
 
-  void _navigateToSettings(BuildContext context) {
-    Navigator.push(
+  void _navigateToSettings(BuildContext context) async {
+    // Navigate to settings and refresh profile when returning
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => WorkerSettingsScreen(),
       ),
     );
+
+    // If settings returned with changes, refresh profile
+    if (result == true) {
+      _refreshProfile();
+    }
   }
 }
 
-// صفحة الإعدادات للعامل - نفس الإعدادات مع تعديل profile_edit
+// صفحة الإعدادات للعامل - محدثة مع refresh callback
 class WorkerSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -319,13 +550,18 @@ class WorkerSettingsScreen extends StatelessWidget {
               icon: Icons.person_outline,
               title: 'Modifier le Profil',
               subtitle: 'Photo, services, tarifs, disponibilité',
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => WorkerProfileEditScreen(),
                   ),
                 );
+
+                // If profile was updated, return true to refresh parent
+                if (result == true) {
+                  Navigator.pop(context, true);
+                }
               },
             ),
             _buildSettingsItem(

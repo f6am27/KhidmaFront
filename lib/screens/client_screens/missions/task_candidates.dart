@@ -1,11 +1,47 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
-import 'tasks_screen.dart'; // استيراد TaskModel من tasks_screen
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
 
-class TaskCandidatesScreen extends StatelessWidget {
+class TaskCandidatesScreen extends StatefulWidget {
   final TaskModel task;
 
   const TaskCandidatesScreen({Key? key, required this.task}) : super(key: key);
+
+  @override
+  _TaskCandidatesScreenState createState() => _TaskCandidatesScreenState();
+}
+
+class _TaskCandidatesScreenState extends State<TaskCandidatesScreen> {
+  bool _isLoading = true;
+  List<TaskApplicationModel> _candidates = [];
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCandidates();
+  }
+
+  Future<void> _loadCandidates() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await taskService.getTaskCandidates(widget.task.id);
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result['ok']) {
+          _candidates = result['candidates'] as List<TaskApplicationModel>;
+        } else {
+          _errorMessage = result['error'];
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,22 +54,28 @@ class TaskCandidatesScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Task summary
           _buildTaskSummary(context, isDark),
-
-          // Candidates list
           Expanded(
-            child: _sampleCandidates.isEmpty
-                ? _buildEmptyState(context, isDark)
-                : ListView.separated(
-                    padding: EdgeInsets.all(16),
-                    itemCount: _sampleCandidates.length,
-                    separatorBuilder: (context, index) => SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final candidate = _sampleCandidates[index];
-                      return _buildCandidateCard(context, candidate, isDark);
-                    },
-                  ),
+            child: _isLoading
+                ? _buildLoadingState()
+                : _errorMessage != null
+                    ? _buildErrorState(isDark)
+                    : _candidates.isEmpty
+                        ? _buildEmptyState(context, isDark)
+                        : RefreshIndicator(
+                            onRefresh: _loadCandidates,
+                            child: ListView.separated(
+                              padding: EdgeInsets.all(16),
+                              itemCount: _candidates.length,
+                              separatorBuilder: (context, index) =>
+                                  SizedBox(height: 16),
+                              itemBuilder: (context, index) {
+                                final candidate = _candidates[index];
+                                return _buildCandidateCard(
+                                    context, candidate, isDark);
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -67,7 +109,7 @@ class TaskCandidatesScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  _getServiceIcon(task.serviceType),
+                  _getServiceIcon(widget.task.serviceType),
                   color: ThemeColors.primaryColor,
                   size: 20,
                 ),
@@ -75,7 +117,7 @@ class TaskCandidatesScreen extends StatelessWidget {
               SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  task.title,
+                  widget.task.title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: isDark ? Colors.white : Colors.black,
@@ -83,7 +125,7 @@ class TaskCandidatesScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                '${task.budget} MRU',
+                '${widget.task.budget} MRU',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: ThemeColors.primaryColor,
@@ -101,7 +143,7 @@ class TaskCandidatesScreen extends StatelessWidget {
               ),
               SizedBox(width: 4),
               Text(
-                task.location,
+                widget.task.location,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: isDark ? Colors.white54 : Colors.grey[500],
                     ),
@@ -114,7 +156,7 @@ class TaskCandidatesScreen extends StatelessWidget {
               ),
               SizedBox(width: 4),
               Text(
-                task.preferredTime,
+                widget.task.preferredTime,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: isDark ? Colors.white54 : Colors.grey[500],
                     ),
@@ -127,7 +169,7 @@ class TaskCandidatesScreen extends StatelessWidget {
   }
 
   Widget _buildCandidateCard(
-      BuildContext context, CandidateModel candidate, bool isDark) {
+      BuildContext context, TaskApplicationModel candidate, bool isDark) {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -146,7 +188,6 @@ class TaskCandidatesScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Profile picture
               Stack(
                 children: [
                   CircleAvatar(
@@ -186,8 +227,6 @@ class TaskCandidatesScreen extends StatelessWidget {
                 ],
               ),
               SizedBox(width: 12),
-
-              // Provider info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,8 +291,6 @@ class TaskCandidatesScreen extends StatelessWidget {
             ],
           ),
           SizedBox(height: 12),
-
-          // Experience and location
           Row(
             children: [
               Icon(
@@ -285,10 +322,8 @@ class TaskCandidatesScreen extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 12),
-
-          // Application message
           if (candidate.applicationMessage.isNotEmpty) ...[
+            SizedBox(height: 12),
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -325,69 +360,8 @@ class TaskCandidatesScreen extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(height: 12),
           ],
-
-          // Proposed price and timing
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: ThemeColors.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.attach_money,
-                      size: 14,
-                      color: ThemeColors.primaryColor,
-                    ),
-                    Text(
-                      '${candidate.proposedPrice} MRU',
-                      style: TextStyle(
-                        color: ThemeColors.primaryColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 12),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: Colors.orange,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      candidate.availableTime,
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
           SizedBox(height: 16),
-
-          // Action buttons
           Row(
             children: [
               Expanded(
@@ -432,6 +406,62 @@ class TaskCandidatesScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+          ),
+          SizedBox(height: 16),
+          Text('Chargement des candidats...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text(
+              'Erreur de chargement',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Une erreur est survenue',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadCandidates,
+              icon: Icon(Icons.refresh),
+              label: Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(BuildContext context, bool isDark) {
     return Center(
       child: Column(
@@ -461,7 +491,6 @@ class TaskCandidatesScreen extends StatelessWidget {
     );
   }
 
-  // Helper method to get service icon (same as in TasksScreen)
   IconData _getServiceIcon(String serviceType) {
     switch (serviceType.toLowerCase()) {
       case 'nettoyage':
@@ -487,120 +516,73 @@ class TaskCandidatesScreen extends StatelessWidget {
     }
   }
 
-  void _contactCandidate(BuildContext context, CandidateModel candidate) {
+  void _contactCandidate(BuildContext context, TaskApplicationModel candidate) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Ouverture du chat avec ${candidate.name}'),
+        content: Text('Fonctionnalité de messagerie bientôt disponible'),
         backgroundColor: ThemeColors.primaryColor,
       ),
     );
   }
 
-  void _acceptCandidate(BuildContext context, CandidateModel candidate) {
-    showDialog(
+  void _acceptCandidate(
+      BuildContext context, TaskApplicationModel candidate) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Accepter le candidat'),
-        content: Text(
-            'Voulez-vous accepter ${candidate.name} pour cette mission au prix de ${candidate.proposedPrice} MRU ?'),
+        content:
+            Text('Voulez-vous accepter ${candidate.name} pour cette mission ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: Text('Annuler'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context); // Return to tasks screen
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${candidate.name} accepté pour cette mission'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: Text('Accepter', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+
+    if (confirm == true) {
+      _performAcceptWorker(candidate);
+    }
   }
 
-  // Sample data
-  static final List<CandidateModel> _sampleCandidates = [
-    CandidateModel(
-      id: '1',
-      name: 'Fatima Al-Zahra',
-      rating: 4.9,
-      reviewCount: 124,
-      location: 'Tevragh Zeina, 2km',
-      completedJobs: 87,
-      proposedPrice: 4500,
-      availableTime: 'Demain matin',
-      applicationMessage:
-          'Bonjour, j\'ai 5 ans d\'expérience dans le nettoyage résidentiel. Je fournis mes propres produits écologiques. Disponible dès demain matin.',
-      isOnline: true,
-      profileImage: null,
-    ),
-    CandidateModel(
-      id: '2',
-      name: 'Aicha Mint Salem',
-      rating: 4.7,
-      reviewCount: 56,
-      location: 'Ksar, 3km',
-      completedJobs: 34,
-      proposedPrice: 4800,
-      availableTime: 'Cet après-midi',
-      applicationMessage:
-          'Je suis spécialisée dans le nettoyage d\'appartements. Travail soigné et rapide garanti.',
-      isOnline: false,
-      profileImage: null,
-    ),
-    CandidateModel(
-      id: '3',
-      name: 'Khadija Ba',
-      rating: 4.8,
-      reviewCount: 89,
-      location: 'Tevragh Zeina, 1km',
-      completedJobs: 67,
-      proposedPrice: 5200,
-      availableTime: 'Demain soir',
-      applicationMessage:
-          'Service professionnel avec équipement moderne. Références disponibles sur demande.',
-      isOnline: true,
-      profileImage: null,
-    ),
-  ];
-}
+  Future<void> _performAcceptWorker(TaskApplicationModel candidate) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
 
-// Candidate model (renamed from ApplicantModel)
-class CandidateModel {
-  final String id;
-  final String name;
-  final double rating;
-  final int reviewCount;
-  final String location;
-  final int completedJobs;
-  final int proposedPrice;
-  final String availableTime;
-  final String applicationMessage;
-  final bool isOnline;
-  final String? profileImage;
+    final result = await taskService.acceptWorker(
+      taskId: widget.task.id,
+      workerId: candidate.id,
+    );
 
-  CandidateModel({
-    required this.id,
-    required this.name,
-    required this.rating,
-    required this.reviewCount,
-    required this.location,
-    required this.completedJobs,
-    required this.proposedPrice,
-    required this.availableTime,
-    required this.applicationMessage,
-    required this.isOnline,
-    this.profileImage,
-  });
+    if (mounted) {
+      Navigator.pop(context);
+
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${candidate.name} accepté pour cette mission'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur lors de l\'acceptation'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
-import 'task_candidates.dart'; // استيراد صفحة المتقدمين
-import 'create_task.dart'; // استيراد صفحة إنشاء المهمة
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
+import 'task_candidates.dart';
+import 'create_task.dart';
 
 class TasksScreen extends StatefulWidget {
   @override
@@ -12,11 +13,83 @@ class TasksScreen extends StatefulWidget {
 class _TasksScreenState extends State<TasksScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = true;
+  List<TaskModel> _allTasks = [];
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _loadTasks();
+  }
+
+  Future<void> _loadTasks() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await taskService.getMyTasks();
+
+    // ════════ ADD THIS DEBUG CODE ════════
+    print('════════ LOAD TASKS DEBUG ════════');
+    print('Result OK: ${result['ok']}');
+    print('Result keys: ${result.keys.toList()}');
+
+    if (result['tasks'] != null) {
+      print('Tasks type: ${result['tasks'].runtimeType}');
+      print('Tasks length: ${(result['tasks'] as List).length}');
+
+      if ((result['tasks'] as List).isNotEmpty) {
+        print('First task type: ${(result['tasks'] as List)[0].runtimeType}');
+        print('First task: ${(result['tasks'] as List)[0]}');
+      }
+    }
+
+    if (result['json'] != null) {
+      print('Raw JSON type: ${result['json'].runtimeType}');
+      print('Raw JSON: ${result['json']}');
+    }
+    print('═══════════════════════════════════');
+    // ════════════════════════════════════
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result['ok']) {
+          _allTasks = result['tasks'] as List<TaskModel>;
+        } else {
+          _errorMessage = result['error'];
+        }
+      });
+    }
+  }
+
+  List<TaskModel> get _publishedTasks {
+    return _allTasks
+        .where((task) => task.status == TaskStatus.published)
+        .toList();
+  }
+
+  List<TaskModel> get _activeTasks {
+    return _allTasks
+        .where((task) =>
+            task.status == TaskStatus.active ||
+            task.status == TaskStatus.workCompleted)
+        .toList();
+  }
+
+  List<TaskModel> get _completedTasks {
+    return _allTasks
+        .where((task) => task.status == TaskStatus.completed)
+        .toList();
+  }
+
+  List<TaskModel> get _cancelledTasks {
+    return _allTasks
+        .where((task) => task.status == TaskStatus.cancelled)
+        .toList();
   }
 
   @override
@@ -27,18 +100,16 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Mes Tâches'),
         centerTitle: true,
-        automaticallyImplyLeading: false, // إزالة زر الرجوع لأنها صفحة رئيسية
+        automaticallyImplyLeading: false,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: ThemeColors.primaryColor,
           labelColor: ThemeColors.primaryColor,
-          unselectedLabelColor: isDark ? Colors.white54 : Colors.grey[600],
+          unselectedLabelColor: Colors.grey[600],
           isScrollable: true,
           tabs: [
             Tab(text: 'Publiées'),
@@ -48,15 +119,19 @@ class _TasksScreenState extends State<TasksScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildTasksList(_publishedTasks, isDark, 'published'),
-          _buildTasksList(_activeTasks, isDark, 'active'),
-          _buildTasksList(_completedTasks, isDark, 'completed'),
-          _buildTasksList(_cancelledTasks, isDark, 'cancelled'),
-        ],
-      ),
+      body: _isLoading
+          ? _buildLoadingState()
+          : _errorMessage != null
+              ? _buildErrorState()
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildTasksList(_publishedTasks, 'published'),
+                    _buildTasksList(_activeTasks, 'active'),
+                    _buildTasksList(_completedTasks, 'completed'),
+                    _buildTasksList(_cancelledTasks, 'cancelled'),
+                  ],
+                ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _createNewTask(),
         backgroundColor: ThemeColors.primaryColor,
@@ -66,23 +141,70 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Widget _buildTasksList(List<TaskModel> tasks, bool isDark, String type) {
-    if (tasks.isEmpty) {
-      return _buildEmptyState(isDark, type);
-    }
-
-    return ListView.separated(
-      padding: EdgeInsets.all(16),
-      itemCount: tasks.length,
-      separatorBuilder: (context, index) => SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        final task = tasks[index];
-        return _buildTaskCard(task, isDark, type);
-      },
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+          ),
+          SizedBox(height: 16),
+          Text('Chargement des tâches...'),
+        ],
+      ),
     );
   }
 
-  Widget _buildTaskCard(TaskModel task, bool isDark, String type) {
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text('Erreur de chargement',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            SizedBox(height: 8),
+            Text(_errorMessage ?? 'Une erreur est survenue',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600])),
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadTasks,
+              icon: Icon(Icons.refresh),
+              label: Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: ThemeColors.primaryColor,
+                  foregroundColor: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTasksList(List<TaskModel> tasks, String type) {
+    if (tasks.isEmpty) {
+      return _buildEmptyState(type);
+    }
+    return RefreshIndicator(
+      onRefresh: _loadTasks,
+      child: ListView.separated(
+        padding: EdgeInsets.all(16),
+        itemCount: tasks.length,
+        separatorBuilder: (context, index) => SizedBox(height: 16),
+        itemBuilder: (context, index) => _buildTaskCard(tasks[index], type),
+      ),
+    );
+  }
+
+  Widget _buildTaskCard(TaskModel task, String type) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isWorkCompleted = task.status == TaskStatus.workCompleted;
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -90,10 +212,9 @@ class _TasksScreenState extends State<TasksScreen>
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: isDark ? ThemeColors.shadowDark : ThemeColors.shadowLight,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
+              color: isDark ? ThemeColors.shadowDark : ThemeColors.shadowLight,
+              blurRadius: 8,
+              offset: Offset(0, 4))
         ],
       ),
       child: Column(
@@ -104,42 +225,32 @@ class _TasksScreenState extends State<TasksScreen>
               Container(
                 padding: EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: _getStatusColor(task.status).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _getServiceIcon(task.serviceType),
-                  color: _getStatusColor(task.status),
-                  size: 20,
-                ),
+                    color: _getStatusColor(task.status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Icon(_getServiceIcon(task.serviceType),
+                    color: _getStatusColor(task.status), size: 20),
               ),
               SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      task.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    Text(task.title,
+                        style: TextStyle(
+                            fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                    ),
+                            color: isDark ? Colors.white : Colors.black)),
                     SizedBox(height: 4),
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(task.status),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        _getStatusText(task.status),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                          color: _getStatusColor(task.status),
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Text(_getStatusText(task.status),
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500)),
                     ),
                   ],
                 ),
@@ -147,95 +258,92 @@ class _TasksScreenState extends State<TasksScreen>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '${task.budget} MRU',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  Text('${task.budget} MRU',
+                      style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: ThemeColors.primaryColor,
-                        ),
-                  ),
+                          color: ThemeColors.primaryColor)),
                   SizedBox(height: 4),
-                  Text(
-                    _formatDate(task.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isDark ? Colors.white54 : Colors.grey[500],
-                        ),
-                  ),
+                  Text(_formatDate(task.createdAt),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white54 : Colors.grey[500])),
                 ],
               ),
             ],
           ),
           SizedBox(height: 12),
-          Text(
-            task.description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isDark ? Colors.white70 : Colors.grey[600],
-                ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(task.description,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.grey[600]),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
           SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 16,
-                color: isDark ? Colors.white54 : Colors.grey[500],
-              ),
+              Icon(Icons.location_on_outlined,
+                  size: 16, color: isDark ? Colors.white54 : Colors.grey[500]),
               SizedBox(width: 4),
               Expanded(
-                child: Text(
-                  task.location,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.white54 : Colors.grey[500],
-                      ),
-                ),
-              ),
-              Icon(
-                Icons.schedule,
-                size: 16,
-                color: isDark ? Colors.white54 : Colors.grey[500],
-              ),
+                  child: Text(task.location,
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white54 : Colors.grey[500]))),
+              Icon(Icons.schedule,
+                  size: 16, color: isDark ? Colors.white54 : Colors.grey[500]),
               SizedBox(width: 4),
-              Text(
-                task.preferredTime,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isDark ? Colors.white54 : Colors.grey[500],
-                    ),
-              ),
+              Text(task.preferredTime,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white54 : Colors.grey[500])),
             ],
           ),
+          if (isWorkCompleted) ...[
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange, width: 1)),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                      child: Text(
+                          'Le prestataire a terminé le travail. Veuillez vérifier et confirmer.',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.orange[800],
+                              fontWeight: FontWeight.w500))),
+                ],
+              ),
+            ),
+          ],
           if (task.applicantsCount > 0 && type == 'published') ...[
             SizedBox(height: 12),
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: ThemeColors.primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  color: ThemeColors.primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.people_outline,
-                    color: ThemeColors.primaryColor,
-                    size: 20,
-                  ),
+                  Icon(Icons.people_outline,
+                      color: ThemeColors.primaryColor, size: 20),
                   SizedBox(width: 8),
-                  Text(
-                    '${task.applicantsCount} candidat(s) intéressé(s)',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  Text('${task.applicantsCount} candidat(s) intéressé(s)',
+                      style: TextStyle(
+                          fontSize: 14,
                           color: ThemeColors.primaryColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
+                          fontWeight: FontWeight.w500)),
                   Spacer(),
                   TextButton(
-                    onPressed: () => _viewCandidates(task),
-                    child: Text(
-                      'Voir',
-                      style: TextStyle(color: ThemeColors.primaryColor),
-                    ),
-                  ),
+                      onPressed: () => _viewCandidates(task),
+                      child: Text('Voir',
+                          style: TextStyle(color: ThemeColors.primaryColor))),
                 ],
               ),
             ),
@@ -245,137 +353,127 @@ class _TasksScreenState extends State<TasksScreen>
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
               child: Row(
                 children: [
                   CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.green,
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
+                      radius: 16,
+                      backgroundColor: Colors.green,
+                      child: Icon(Icons.person, color: Colors.white, size: 16)),
                   SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          task.assignedProvider!,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                        ),
-                        Row(
-                          children: List.generate(5, (index) {
-                            return Icon(
-                              index < (task.providerRating ?? 0)
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              size: 12,
-                              color: Colors.amber,
-                            );
-                          }),
-                        ),
+                        Text(task.assignedProvider!,
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? Colors.white : Colors.black)),
+                        if (task.providerRating != null)
+                          Row(
+                              children: List.generate(
+                                  5,
+                                  (index) => Icon(
+                                      index < task.providerRating!
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      size: 12,
+                                      color: Colors.amber))),
                       ],
                     ),
                   ),
-                  if (type == 'active')
+                  if (type == 'active' && !isWorkCompleted)
                     TextButton(
-                      onPressed: () => _contactProvider(task),
-                      child: Text(
-                        'Contacter',
-                        style: TextStyle(
-                          color: ThemeColors.primaryColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
+                        onPressed: () => _contactProvider(task),
+                        child: Text('Contacter',
+                            style: TextStyle(
+                                color: ThemeColors.primaryColor,
+                                fontSize: 12))),
                 ],
               ),
             ),
           ],
           SizedBox(height: 12),
-          Row(
-            children: [
-              if (type == 'published') ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _editTask(task),
-                    child: Text(
-                      'Modifier',
-                      style: TextStyle(color: ThemeColors.primaryColor),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: ThemeColors.primaryColor),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _cancelTask(task),
-                    child: Text('Annuler'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ] else if (type == 'completed') ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _rateService(task),
-                    child: Text(
-                      'Évaluer',
-                      style: TextStyle(color: ThemeColors.primaryColor),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: ThemeColors.primaryColor),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _reorderService(task),
-                    child: Text('Recommander'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          _buildActionButtons(task, type, isWorkCompleted),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isDark, String type) {
+  Widget _buildActionButtons(
+      TaskModel task, String type, bool isWorkCompleted) {
+    if (type == 'published') {
+      return Row(
+        children: [
+          Expanded(
+              child: OutlinedButton(
+                  onPressed: () => _editTask(task),
+                  child: Text('Modifier',
+                      style: TextStyle(color: ThemeColors.primaryColor)),
+                  style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: ThemeColors.primaryColor),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))))),
+          SizedBox(width: 12),
+          Expanded(
+              child: ElevatedButton(
+                  onPressed: () => _cancelTask(task),
+                  child: Text('Annuler'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))))),
+        ],
+      );
+    } else if (type == 'active' && isWorkCompleted) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+            onPressed: () => _confirmCompletion(task),
+            icon: Icon(Icons.check_circle, size: 18),
+            label: Text('Confirmer et payer'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)))),
+      );
+    } else if (type == 'completed') {
+      return Row(
+        children: [
+          Expanded(
+              child: OutlinedButton(
+                  onPressed: () => _rateService(task),
+                  child: Text('Évaluer',
+                      style: TextStyle(color: ThemeColors.primaryColor)),
+                  style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: ThemeColors.primaryColor),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))))),
+          SizedBox(width: 12),
+          Expanded(
+              child: ElevatedButton(
+                  onPressed: () => _reorderService(task),
+                  child: Text('Recommander'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: ThemeColors.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))))),
+        ],
+      );
+    }
+    return SizedBox.shrink();
+  }
+
+  Widget _buildEmptyState(String type) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     String title, subtitle;
     IconData icon;
-
     switch (type) {
       case 'published':
         icon = Icons.publish;
@@ -402,45 +500,36 @@ class _TasksScreenState extends State<TasksScreen>
         title = 'Aucune tâche';
         subtitle = 'Vos tâches apparaîtront ici';
     }
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 64,
-            color: isDark ? Colors.white38 : Colors.grey[400],
-          ),
+          Icon(icon,
+              size: 64, color: isDark ? Colors.white38 : Colors.grey[400]),
           SizedBox(height: 16),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: isDark ? Colors.white70 : Colors.grey[600],
-                ),
-          ),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : Colors.grey[600])),
           SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isDark ? Colors.white54 : Colors.grey[500],
-                ),
-          ),
+          Text(subtitle,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white54 : Colors.grey[500])),
           if (type == 'published') ...[
             SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: () => _createNewTask(),
-              icon: Icon(Icons.add),
-              label: Text('Créer une tâche'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeColors.primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-            ),
+                onPressed: () => _createNewTask(),
+                icon: Icon(Icons.add),
+                label: Text('Créer une tâche'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: ThemeColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25)),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 20, vertical: 12)))
           ],
         ],
       ),
@@ -453,6 +542,8 @@ class _TasksScreenState extends State<TasksScreen>
         return Colors.blue;
       case TaskStatus.active:
         return Colors.orange;
+      case TaskStatus.workCompleted:
+        return Colors.deepOrange;
       case TaskStatus.completed:
         return Colors.green;
       case TaskStatus.cancelled:
@@ -491,6 +582,8 @@ class _TasksScreenState extends State<TasksScreen>
         return 'Publiée';
       case TaskStatus.active:
         return 'En cours';
+      case TaskStatus.workCompleted:
+        return 'À confirmer';
       case TaskStatus.completed:
         return 'Terminée';
       case TaskStatus.cancelled:
@@ -501,109 +594,45 @@ class _TasksScreenState extends State<TasksScreen>
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
+    if (difference.inDays == 0)
       return 'Aujourd\'hui';
-    } else if (difference.inDays == 1) {
+    else if (difference.inDays == 1)
       return 'Hier';
-    } else if (difference.inDays < 7) {
+    else if (difference.inDays < 7)
       return '${difference.inDays} jours';
-    } else {
+    else
       return '${date.day}/${date.month}/${date.year}';
-    }
   }
 
-  // Action methods
   void _createNewTask() async {
     final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreateTaskScreen(),
-      ),
-    );
-
-    if (result != null && result is Map<String, dynamic>) {
-      final taskData = result['taskData'];
-      final isEditing = result['isEditing'] ?? false;
-
-      if (!isEditing) {
-        // إضافة مهمة جديدة
-        final newTask = TaskModel(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: taskData['title'],
-          description: taskData['description'],
-          serviceType: taskData['serviceType'],
-          budget: taskData['budget'],
-          location: taskData['location'],
-          preferredTime: taskData['preferredTime'],
-          status: TaskStatus.published,
-          createdAt: DateTime.now(),
-          applicantsCount: 0,
-        );
-
-        setState(() {
-          _publishedTasks.insert(0, newTask);
-        });
-
-        // التنقل إلى تبويب المنشورة
-        _tabController.animateTo(0);
-      }
+        context, MaterialPageRoute(builder: (context) => CreateTaskScreen()));
+    if (result == true) {
+      _loadTasks();
+      _tabController.animateTo(0);
     }
   }
 
-  void _viewCandidates(TaskModel task) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TaskCandidatesScreen(task: task),
-      ),
-    );
+  void _viewCandidates(TaskModel task) async {
+    final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => TaskCandidatesScreen(task: task)));
+    if (result == true) _loadTasks();
   }
 
   void _contactProvider(TaskModel task) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Ouverture du chat avec ${task.assignedProvider}'),
-        backgroundColor: ThemeColors.primaryColor,
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Fonctionnalité de messagerie bientôt disponible'),
+        backgroundColor: ThemeColors.primaryColor));
   }
 
   void _editTask(TaskModel task) async {
     final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreateTaskScreen(taskToEdit: task),
-      ),
-    );
-
-    if (result != null && result is Map<String, dynamic>) {
-      final taskData = result['taskData'];
-      final isEditing = result['isEditing'] ?? false;
-
-      if (isEditing) {
-        // تحديث المهمة الموجودة
-        setState(() {
-          final index = _publishedTasks.indexWhere((t) => t.id == task.id);
-          if (index != -1) {
-            _publishedTasks[index] = TaskModel(
-              id: task.id,
-              title: taskData['title'],
-              description: taskData['description'],
-              serviceType: taskData['serviceType'],
-              budget: taskData['budget'],
-              location: taskData['location'],
-              preferredTime: taskData['preferredTime'],
-              status: task.status,
-              createdAt: task.createdAt,
-              applicantsCount: task.applicantsCount,
-              assignedProvider: task.assignedProvider,
-              providerRating: task.providerRating,
-            );
-          }
-        });
-      }
-    }
+        context,
+        MaterialPageRoute(
+            builder: (context) => CreateTaskScreen(taskToEdit: task)));
+    if (result == true) _loadTasks();
   }
 
   void _cancelTask(TaskModel task) {
@@ -614,161 +643,92 @@ class _TasksScreenState extends State<TasksScreen>
         content: Text('Êtes-vous sûr de vouloir annuler cette tâche ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Non'),
-          ),
+              onPressed: () => Navigator.pop(context), child: Text('Non')),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _publishedTasks.remove(task);
-                task.status = TaskStatus.cancelled;
-                _cancelledTasks.add(task);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tâche annulée'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            },
-            child: Text('Oui', style: TextStyle(color: Colors.red)),
-          ),
+              onPressed: () {
+                Navigator.pop(context);
+                _performCancelTask(task);
+              },
+              child: Text('Oui', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
   }
 
-  void _rateService(TaskModel task) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Évaluation du service "${task.title}"'),
-        backgroundColor: ThemeColors.primaryColor,
+  Future<void> _performCancelTask(TaskModel task) async {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()));
+    final result = await taskService.updateTaskStatus(
+        taskId: task.id, status: 'cancelled');
+    if (mounted) {
+      Navigator.pop(context);
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Tâche annulée'), backgroundColor: Colors.red));
+        _loadTasks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  void _confirmCompletion(TaskModel task) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirmer la completion'),
+        content: Text(
+            'Le travail a-t-il été effectué correctement ? Le paiement sera traité après confirmation.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Pas encore')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: Text('Confirmer', style: TextStyle(color: Colors.white))),
+        ],
       ),
     );
+    if (confirm == true) _performConfirmCompletion(task);
+  }
+
+  Future<void> _performConfirmCompletion(TaskModel task) async {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()));
+    final result = await taskService.confirmTaskCompletion(taskId: task.id);
+    if (mounted) {
+      Navigator.pop(context);
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Tâche confirmée terminée. Le paiement sera traité.'),
+            backgroundColor: Colors.green));
+        _loadTasks();
+        _tabController.animateTo(2);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  void _rateService(TaskModel task) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Évaluation du service "${task.title}"'),
+        backgroundColor: ThemeColors.primaryColor));
   }
 
   void _reorderService(TaskModel task) {
     Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CreateTaskScreen(taskToEdit: task),
-      ),
-    );
+        context,
+        MaterialPageRoute(
+            builder: (context) => CreateTaskScreen(taskToEdit: task)));
   }
-
-  // Sample data
-  final List<TaskModel> _publishedTasks = [
-    TaskModel(
-      id: '1',
-      title: 'Nettoyage appartement 3 pièces',
-      description:
-          'Nettoyage complet d\'un appartement de 3 pièces avec cuisine et salle de bain. Produits fournis.',
-      serviceType: 'Nettoyage',
-      budget: 5000,
-      location: 'Tevragh Zeina, Nouakchott',
-      preferredTime: '9:00 AM',
-      status: TaskStatus.published,
-      createdAt: DateTime.now().subtract(Duration(hours: 2)),
-      applicantsCount: 3,
-    ),
-    TaskModel(
-      id: '2',
-      title: 'Réparation robinet cuisine',
-      description: 'Réparation d\'un robinet qui fuit dans la cuisine. Urgent.',
-      serviceType: 'Plomberie',
-      budget: 2000,
-      location: 'Ksar, Nouakchott',
-      preferredTime: 'Après-midi (14h-18h)',
-      status: TaskStatus.published,
-      createdAt: DateTime.now().subtract(Duration(days: 1)),
-      applicantsCount: 1,
-    ),
-  ];
-
-  final List<TaskModel> _activeTasks = [
-    TaskModel(
-      id: '3',
-      title: 'Peinture salon',
-      description: 'Peinture du salon avec couleur beige.',
-      serviceType: 'Peinture',
-      budget: 8000,
-      location: 'Sebkha, Nouakchott',
-      preferredTime: 'Toute la journée',
-      status: TaskStatus.active,
-      createdAt: DateTime.now().subtract(Duration(days: 3)),
-      assignedProvider: 'Hassan Ould Baba',
-      providerRating: 4,
-      applicantsCount: 0,
-    ),
-  ];
-
-  final List<TaskModel> _completedTasks = [
-    TaskModel(
-      id: '4',
-      title: 'Jardinage et tonte',
-      description: 'Tonte de pelouse et taille des arbustes.',
-      serviceType: 'Jardinage',
-      budget: 3000,
-      location: 'Arafat, Nouakchott',
-      preferredTime: '8:00 AM',
-      status: TaskStatus.completed,
-      createdAt: DateTime.now().subtract(Duration(days: 7)),
-      assignedProvider: 'Omar Ba',
-      providerRating: 5,
-      applicantsCount: 0,
-    ),
-  ];
-
-  final List<TaskModel> _cancelledTasks = [
-    TaskModel(
-      id: '5',
-      title: 'Déménagement studio',
-      description: 'Déménagement d\'un studio vers nouvel appartement.',
-      serviceType: 'Déménagement',
-      budget: 15000,
-      location: 'Dar Naim, Nouakchott',
-      preferredTime: 'À convenir',
-      status: TaskStatus.cancelled,
-      createdAt: DateTime.now().subtract(Duration(days: 10)),
-      applicantsCount: 0,
-    ),
-  ];
-}
-
-// Models
-enum TaskStatus { published, active, completed, cancelled }
-
-class TaskModel {
-  final String id;
-  final String title;
-  final String description;
-  final String serviceType;
-  final int budget;
-  final String location;
-  final String preferredTime;
-  TaskStatus status;
-  final DateTime createdAt;
-  final String? assignedProvider;
-  final int? providerRating;
-  final int applicantsCount;
-  final bool isUrgent; // ← إضافة هذا السطر
-  final LatLng? coordinates;
-
-  TaskModel({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.serviceType,
-    required this.budget,
-    required this.location,
-    required this.preferredTime,
-    required this.status,
-    required this.createdAt,
-    this.assignedProvider,
-    this.providerRating,
-    required this.applicantsCount,
-    this.isUrgent = false, // ← القيمة الافتراضية
-    this.coordinates,
-  });
 }

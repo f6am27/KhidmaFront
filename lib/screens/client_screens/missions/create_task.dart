@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
 import '../onboarding/client_location_permission_screen.dart';
 import 'location_picker_screen.dart';
-import 'tasks_screen.dart';
 
 class CreateTaskScreen extends StatefulWidget {
   final TaskModel? taskToEdit;
@@ -33,7 +34,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   LatLng? _selectedCoordinates;
   bool _isUrgent = false;
 
-  // Service types with their icons and colors
   final Map<String, Map<String, dynamic>> _serviceTypes = {
     'Nettoyage': {'icon': Icons.cleaning_services, 'color': Colors.blue},
     'Plomberie': {'icon': Icons.plumbing, 'color': Colors.indigo},
@@ -91,11 +91,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     _budgetController.text = task.budget.toString();
     _selectedLocation = task.location.split(', ').first;
     _selectedServiceType = task.serviceType;
+    _isUrgent = task.isUrgent;
+    _selectedCoordinates = task.coordinates;
 
-    try {
-      _isUrgent = (task as dynamic).isUrgent ?? false;
-    } catch (e) {
-      _isUrgent = false;
+    if (task.coordinates != null) {
+      _isUsingCurrentLocation = true;
+      _currentLocationAddress = task.location;
     }
   }
 
@@ -141,7 +142,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         centerTitle: true,
         actions: [
-          if (isEditing)
+          if (isEditing && widget.taskToEdit?.status == TaskStatus.published)
             IconButton(
               icon: Container(
                 padding: EdgeInsets.all(8),
@@ -165,65 +166,50 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Service Type Chips
                     _buildServiceTypeChips(isDark),
                     SizedBox(height: 24),
-
-                    // Title Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Titre de la tâche',
                       child: _buildTitleField(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Description Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Description',
                       child: _buildDescriptionField(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Budget Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Budget',
                       child: _buildBudgetField(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Priority Switch - Now in its own card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Priorité',
                       child: _buildUrgentSwitch(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Location Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Localisation',
                       child: _buildLocationSelector(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Time Picker Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Horaire',
                       child: _buildTimePicker(isDark),
                     ),
                     SizedBox(height: 20),
-
-                    // Time Description Card
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Quand',
                       child: _buildTimeDescription(isDark),
                     ),
-                    SizedBox(height: 100), // Space for floating button
+                    SizedBox(height: 100),
                   ],
                 ),
               ),
@@ -462,8 +448,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         if (budget == null || budget <= 0) {
           return 'Budget invalide';
         }
-        if (budget < 500) {
-          return 'Min 500 MRU';
+        if (budget < 50) {
+          return 'Min 50 MRU';
         }
         return null;
       },
@@ -526,11 +512,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Widget _buildLocationSelector(bool isDark) {
     return Column(
       children: [
-        // Current Location Card
         _buildCurrentLocationCard(isDark),
         SizedBox(height: 16),
-
-        // Divider with "OU"
         Row(
           children: [
             Expanded(child: Divider(color: Colors.grey[300])),
@@ -549,8 +532,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           ],
         ),
         SizedBox(height: 16),
-
-        // Zone Selection
         DropdownButtonFormField<String>(
           value: _selectedLocation,
           decoration: InputDecoration(
@@ -669,7 +650,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       height: 200,
       child: Row(
         children: [
-          // Hours
           Expanded(
             flex: 2,
             child: Column(
@@ -727,8 +707,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               ],
             ),
           ),
-
-          // Minutes
           Expanded(
             flex: 2,
             child: Column(
@@ -786,8 +764,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               ],
             ),
           ),
-
-          // AM/PM
           Expanded(
             flex: 1,
             child: Column(
@@ -999,7 +975,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       return;
     }
 
-    // عرض واجهة طلب إذن الموقع للعميل
     final bool? locationGranted = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -1008,7 +983,6 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     );
 
     if (locationGranted == true) {
-      // فتح شاشة اختيار الموقع على الخريطة
       final result = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
@@ -1033,7 +1007,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 Icon(Icons.location_on, color: Colors.white, size: 20),
                 SizedBox(width: 12),
                 Expanded(
-                  child: Text('Position sélectionnée: ${address}'),
+                  child: Text('Position sélectionnée: $address'),
                 ),
               ],
             ),
@@ -1054,12 +1028,15 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   void _submitForm() async {
+    print('🔵 _submitForm called');
+
     if (!_formKey.currentState!.validate()) {
+      print('❌ Form validation failed');
       return;
     }
 
+    print('✅ Form validation passed');
     setState(() => _isLoading = true);
-    await Future.delayed(Duration(seconds: 2));
 
     final isEditing = widget.taskToEdit != null;
     final String fullLocation =
@@ -1067,43 +1044,82 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             ? _currentLocationAddress!
             : '$_selectedLocation, Nouakchott';
 
-    final taskData = {
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'serviceType': _selectedServiceType,
-      'budget': int.parse(_budgetController.text),
-      'location': fullLocation,
-      'coordinates': _selectedCoordinates != null
-          ? {
-              'latitude': _selectedCoordinates!.latitude,
-              'longitude': _selectedCoordinates!.longitude
-            }
-          : null,
-      'preferredTime': _getFormattedTime(),
-      'timeDescription': _selectedTimeDescription,
-      'isUsingCurrentLocation': _isUsingCurrentLocation,
-      'isUrgent': _isUrgent,
-    };
+    try {
+      Map<String, dynamic> result;
 
-    setState(() => _isLoading = false);
+      if (isEditing) {
+        result = await taskService.updateTask(
+          taskId: widget.taskToEdit!.id,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          serviceType: _selectedServiceType,
+          budget: int.parse(_budgetController.text),
+          location: fullLocation,
+          preferredTime: _getFormattedTime(),
+          isUrgent: _isUrgent,
+          latitude: _selectedCoordinates?.latitude,
+          longitude: _selectedCoordinates?.longitude,
+        );
+      } else {
+        result = await taskService.createTask(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          serviceType: _selectedServiceType,
+          budget: int.parse(_budgetController.text),
+          location: fullLocation,
+          preferredTime: _getFormattedTime(),
+          isUrgent: _isUrgent,
+          latitude: _selectedCoordinates?.latitude,
+          longitude: _selectedCoordinates?.longitude,
+          timeDescription: _selectedTimeDescription,
+        );
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isEditing
-            ? 'Tâche modifiée avec succès!'
-            : 'Tâche créée avec succès!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: EdgeInsets.all(16),
-      ),
-    );
+      if (mounted) {
+        setState(() => _isLoading = false);
 
-    Navigator.pop(context, {
-      'taskData': taskData,
-      'isEditing': isEditing,
-      'taskId': widget.taskToEdit?.id,
-    });
+        if (result['ok']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isEditing
+                  ? 'Tâche modifiée avec succès!'
+                  : 'Tâche créée avec succès!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: EdgeInsets.all(16),
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['error'] ?? 'Une erreur est survenue'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
   }
 
   void _showDeleteConfirmation() {
@@ -1111,35 +1127,62 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Supprimer la tâche'),
+        title: Text('Annuler la tâche'),
         content: Text(
-            'Êtes-vous sûr de vouloir supprimer cette tâche? Cette action est irréversible.'),
+            'Êtes-vous sûr de vouloir annuler cette tâche? Cette action est irréversible.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Annuler'),
+            child: Text('Non'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tâche supprimée'),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  margin: EdgeInsets.all(16),
-                ),
-              );
-            },
+            onPressed: () => _performDelete(),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Supprimer', style: TextStyle(color: Colors.white)),
+            child: Text('Oui, annuler', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _performDelete() async {
+    Navigator.pop(context);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await taskService.updateTaskStatus(
+      taskId: widget.taskToEdit!.id,
+      status: 'cancelled',
+    );
+
+    if (mounted) {
+      Navigator.pop(context);
+
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tâche annulée'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: EdgeInsets.all(16),
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur lors de l\'annulation'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override

@@ -6,6 +6,7 @@ import '../core/config/api_config.dart';
 import '../models/user_model.dart';
 import '../models/worker_profile_model.dart';
 import 'auth_manager.dart';
+import '../models/client_profile_model.dart';
 
 class ProfileService {
   final String _baseUrl = ApiConfig.baseUrl();
@@ -340,6 +341,111 @@ class ProfileService {
       return {
         'ok': false,
         'error': 'Network error: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Get client profile
+  Future<Map<String, dynamic>> getClientProfile() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        endpoint: '${_baseUrl.replaceAll('/users', '')}/clients/profile/',
+      );
+
+      final json = _parseResponse(response);
+
+      if (response.statusCode == 200) {
+        final clientProfile = ClientProfile.fromJson(json);
+
+        return {
+          'ok': true,
+          'clientProfile': clientProfile,
+          'json': json,
+        };
+      } else {
+        return {
+          'ok': false,
+          'error': json['detail'] ?? 'Failed to load client profile',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Please login again' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      return {
+        'ok': false,
+        'error': 'Network error: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Update client profile
+  /// Update client profile - SIMPLIFIED VERSION
+  Future<Map<String, dynamic>> updateClientProfile({
+    String? firstName,
+    String? lastName,
+    String? address,
+    String? gender,
+    String? emergencyContact,
+    bool? notificationsEnabled,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+
+      // User fields
+      if (firstName != null) body['first_name'] = firstName;
+      if (lastName != null) body['last_name'] = lastName;
+
+      // ClientProfile fields
+      if (address != null) body['address'] = address;
+      if (gender != null) body['gender'] = gender;
+      if (emergencyContact != null)
+        body['emergency_contact'] = emergencyContact;
+      if (notificationsEnabled != null)
+        body['notifications_enabled'] = notificationsEnabled;
+
+      print('Updating client profile with: $body');
+
+      final response = await AuthManager.authenticatedRequest(
+        method: 'PUT',
+        endpoint: '${_baseUrl.replaceAll('/users', '')}/clients/profile/',
+        body: body,
+      );
+
+      final json = _parseResponse(response);
+
+      if (response.statusCode == 200) {
+        return {
+          'ok': true,
+          'message': 'Profil mis à jour avec succès',
+          'json': json,
+        };
+      } else {
+        return {
+          'ok': false,
+          'error': json['detail'] ?? json['error'] ?? 'Échec de la mise à jour',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
         'json': {},
       };
     }

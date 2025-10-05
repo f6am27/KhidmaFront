@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  intl: ^0.18.0  # للتاريخ DateFormat
   http: ^1.2.1
   flutter_secure_storage: ^9.0.0
   flutter_svg: ^2.0.9

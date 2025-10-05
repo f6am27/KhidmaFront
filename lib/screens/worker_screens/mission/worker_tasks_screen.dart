@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../constants/colors.dart';
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
 
 class WorkerTasksScreen extends StatefulWidget {
   @override
@@ -9,11 +11,61 @@ class WorkerTasksScreen extends StatefulWidget {
 class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = true;
+  List<TaskModel> _allTasks = [];
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _loadTasks();
+  }
+
+  Future<void> _loadTasks() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await taskService.getMyTasks();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result['ok']) {
+          _allTasks = result['tasks'] as List<TaskModel>;
+        } else {
+          _errorMessage = result['error'];
+        }
+      });
+    }
+  }
+
+  List<TaskModel> get _acceptedTasks {
+    return _allTasks
+        .where((task) =>
+            task.status == TaskStatus.published ||
+            (task.status == TaskStatus.active && task.assignedProvider != null))
+        .toList();
+  }
+
+  List<TaskModel> get _inProgressTasks {
+    return _allTasks.where((task) => task.status == TaskStatus.active).toList();
+  }
+
+  List<TaskModel> get _completedTasks {
+    return _allTasks
+        .where((task) =>
+            task.status == TaskStatus.completed ||
+            task.status == TaskStatus.workCompleted)
+        .toList();
+  }
+
+  List<TaskModel> get _cancelledTasks {
+    return _allTasks
+        .where((task) => task.status == TaskStatus.cancelled)
+        .toList();
   }
 
   @override
@@ -55,35 +107,87 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: _isLoading
+          ? _buildLoadingState()
+          : _errorMessage != null
+              ? _buildErrorState()
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildTasksList(_acceptedTasks, 'accepted'),
+                    _buildTasksList(_inProgressTasks, 'inprogress'),
+                    _buildTasksList(_completedTasks, 'completed'),
+                    _buildTasksList(_cancelledTasks, 'cancelled'),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildTasksList(_acceptedTasks, 'accepted'),
-          _buildTasksList(_inProgressTasks, 'inprogress'),
-          _buildTasksList(_completedTasks, 'completed'),
-          _buildTasksList(_cancelledTasks, 'cancelled'),
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation(AppColors.primaryPurple),
+          ),
+          SizedBox(height: 16),
+          Text('Chargement des tâches...'),
         ],
       ),
     );
   }
 
-  Widget _buildTasksList(List<WorkerTaskModel> tasks, String type) {
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text('Erreur de chargement',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            SizedBox(height: 8),
+            Text(_errorMessage ?? 'Une erreur est survenue',
+                textAlign: TextAlign.center),
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadTasks,
+              icon: Icon(Icons.refresh),
+              label: Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryPurple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTasksList(List<TaskModel> tasks, String type) {
     if (tasks.isEmpty) {
       return _buildEmptyState(type);
     }
 
-    return ListView.separated(
-      padding: EdgeInsets.all(16),
-      itemCount: tasks.length,
-      separatorBuilder: (context, index) => SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        final task = tasks[index];
-        return _buildTaskCard(task, type);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadTasks,
+      child: ListView.separated(
+        padding: EdgeInsets.all(16),
+        itemCount: tasks.length,
+        separatorBuilder: (context, index) => SizedBox(height: 16),
+        itemBuilder: (context, index) {
+          final task = tasks[index];
+          return _buildTaskCard(task, type);
+        },
+      ),
     );
   }
 
-  Widget _buildTaskCard(WorkerTaskModel task, String type) {
+  Widget _buildTaskCard(TaskModel task, String type) {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -177,51 +281,33 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
           SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
+              Icon(Icons.location_on_outlined,
+                  size: 16, color: AppColors.textSecondary),
               SizedBox(width: 4),
               Expanded(
                 child: Text(
                   task.location,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+                  style:
+                      TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
               ),
-              Icon(
-                Icons.schedule,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
+              Icon(Icons.schedule, size: 16, color: AppColors.textSecondary),
               SizedBox(width: 4),
               Text(
                 task.preferredTime,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ],
           ),
           SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.calendar_today,
-                size: 14,
-                color: AppColors.textSecondary,
-              ),
+              Icon(Icons.calendar_today,
+                  size: 14, color: AppColors.textSecondary),
               SizedBox(width: 4),
               Text(
-                _formatDate(task.acceptedAt),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+                _formatDate(task.createdAt),
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               Spacer(),
               if (task.isUrgent)
@@ -249,7 +335,7 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     );
   }
 
-  Widget _buildActionButtons(WorkerTaskModel task, String type) {
+  Widget _buildActionButtons(TaskModel task, String type) {
     switch (type) {
       case 'accepted':
         return Row(
@@ -257,10 +343,7 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
             Expanded(
               child: OutlinedButton(
                 onPressed: () => _cancelTask(task),
-                child: Text(
-                  'Annuler',
-                  style: TextStyle(color: Colors.red),
-                ),
+                child: Text('Annuler', style: TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: Colors.red),
                   shape: RoundedRectangleBorder(
@@ -395,11 +478,7 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 64,
-            color: AppColors.mediumGray,
-          ),
+          Icon(icon, size: 64, color: AppColors.mediumGray),
           SizedBox(height: 16),
           Text(
             title,
@@ -412,10 +491,7 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
           SizedBox(height: 8),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
@@ -423,15 +499,16 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     );
   }
 
-  Color _getStatusColor(WorkerTaskStatus status) {
+  Color _getStatusColor(TaskStatus status) {
     switch (status) {
-      case WorkerTaskStatus.accepted:
+      case TaskStatus.published:
+      case TaskStatus.active:
         return AppColors.cyan;
-      case WorkerTaskStatus.inProgress:
+      case TaskStatus.workCompleted:
         return AppColors.orange;
-      case WorkerTaskStatus.completed:
+      case TaskStatus.completed:
         return AppColors.green;
-      case WorkerTaskStatus.cancelled:
+      case TaskStatus.cancelled:
         return Colors.red;
     }
   }
@@ -461,15 +538,17 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     }
   }
 
-  String _getStatusText(WorkerTaskStatus status) {
+  String _getStatusText(TaskStatus status) {
     switch (status) {
-      case WorkerTaskStatus.accepted:
+      case TaskStatus.published:
         return 'Acceptée';
-      case WorkerTaskStatus.inProgress:
+      case TaskStatus.active:
         return 'En cours';
-      case WorkerTaskStatus.completed:
+      case TaskStatus.workCompleted:
         return 'Terminée';
-      case WorkerTaskStatus.cancelled:
+      case TaskStatus.completed:
+        return 'Terminée';
+      case TaskStatus.cancelled:
         return 'Annulée';
     }
   }
@@ -477,20 +556,17 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
+    if (difference.inDays == 0)
       return 'Aujourd\'hui';
-    } else if (difference.inDays == 1) {
+    else if (difference.inDays == 1)
       return 'Hier';
-    } else if (difference.inDays < 7) {
+    else if (difference.inDays < 7)
       return '${difference.inDays} jours';
-    } else {
+    else
       return '${date.day}/${date.month}/${date.year}';
-    }
   }
 
-  // Action methods
-  void _startTask(WorkerTaskModel task) {
+  void _startTask(TaskModel task) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -498,37 +574,51 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
         content: Text('Êtes-vous prêt à commencer cette tâche ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Pas encore'),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: Text('Pas encore')),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() {
-                _acceptedTasks.remove(task);
-                task.status = WorkerTaskStatus.inProgress;
-                task.startedAt = DateTime.now();
-                _inProgressTasks.insert(0, task);
-              });
-              _tabController.animateTo(1); // Aller au tab "En cours"
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tâche commencée avec succès'),
-                  backgroundColor: AppColors.green,
-                ),
-              );
+              _performStartTask(task);
             },
-            child: Text(
-              'Commencer',
-              style: TextStyle(color: AppColors.primaryPurple),
-            ),
+            child: Text('Commencer',
+                style: TextStyle(color: AppColors.primaryPurple)),
           ),
         ],
       ),
     );
   }
 
-  void _cancelTask(WorkerTaskModel task) {
+  Future<void> _performStartTask(TaskModel task) async {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()));
+
+    final result =
+        await taskService.updateTaskStatus(taskId: task.id, status: 'active');
+
+    if (mounted) {
+      Navigator.pop(context);
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Tâche commencée avec succès'),
+              backgroundColor: AppColors.green),
+        );
+        _loadTasks();
+        _tabController.animateTo(1);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(result['error'] ?? 'Erreur'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _cancelTask(TaskModel task) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -536,23 +626,11 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
         content: Text('Êtes-vous sûr de vouloir annuler cette tâche ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Non'),
-          ),
+              onPressed: () => Navigator.pop(context), child: Text('Non')),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() {
-                _acceptedTasks.remove(task);
-                task.status = WorkerTaskStatus.cancelled;
-                _cancelledTasks.add(task);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tâche annulée'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              _performCancelTask(task);
             },
             child: Text('Oui', style: TextStyle(color: Colors.red)),
           ),
@@ -561,7 +639,33 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     );
   }
 
-  void _completeTask(WorkerTaskModel task) {
+  Future<void> _performCancelTask(TaskModel task) async {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()));
+
+    final result = await taskService.updateTaskStatus(
+        taskId: task.id, status: 'cancelled');
+
+    if (mounted) {
+      Navigator.pop(context);
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Tâche annulée'), backgroundColor: Colors.red),
+        );
+        _loadTasks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(result['error'] ?? 'Erreur'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _completeTask(TaskModel task) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -569,46 +673,59 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
         content: Text('Avez-vous terminé cette tâche ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Pas encore'),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: Text('Pas encore')),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() {
-                _inProgressTasks.remove(task);
-                task.status = WorkerTaskStatus.completed;
-                task.completedAt = DateTime.now();
-                _completedTasks.insert(0, task);
-              });
-              _tabController.animateTo(2); // Aller au tab "Terminées"
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Tâche marquée comme terminée'),
-                  backgroundColor: AppColors.green,
-                ),
-              );
+              _performCompleteTask(task);
             },
-            child: Text(
-              'Terminée',
-              style: TextStyle(color: AppColors.green),
-            ),
+            child: Text('Terminée', style: TextStyle(color: AppColors.green)),
           ),
         ],
       ),
     );
   }
 
-  void _contactClient(WorkerTaskModel task) {
+  Future<void> _performCompleteTask(TaskModel task) async {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()));
+
+    final result = await taskService.updateTaskStatus(
+        taskId: task.id, status: 'work_completed');
+
+    if (mounted) {
+      Navigator.pop(context);
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Tâche marquée comme terminée'),
+              backgroundColor: AppColors.green),
+        );
+        _loadTasks();
+        _tabController.animateTo(2);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(result['error'] ?? 'Erreur'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _contactClient(TaskModel task) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Ouverture du chat avec le client'),
+        content: Text('Fonctionnalité de messagerie bientôt disponible'),
         backgroundColor: AppColors.primaryPurple,
       ),
     );
   }
 
-  void _viewTaskDetails(WorkerTaskModel task) {
+  void _viewTaskDetails(TaskModel task) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Affichage des détails de "${task.title}"'),
@@ -616,128 +733,4 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
       ),
     );
   }
-
-  // Sample data
-  final List<WorkerTaskModel> _acceptedTasks = [
-    WorkerTaskModel(
-      id: '1',
-      title: 'Nettoyage appartement 3 pièces',
-      description:
-          'Nettoyage complet d\'un appartement de 3 pièces avec cuisine et salle de bain.',
-      serviceType: 'Nettoyage',
-      budget: 8500,
-      location: 'Tevragh-Zeina, Nouakchott',
-      preferredTime: '9:00 AM',
-      status: WorkerTaskStatus.accepted,
-      acceptedAt: DateTime.now().subtract(Duration(hours: 3)),
-      isUrgent: false,
-    ),
-    WorkerTaskModel(
-      id: '2',
-      title: 'Réparation robinet cuisine',
-      description: 'Réparation d\'un robinet qui fuit dans la cuisine.',
-      serviceType: 'Plomberie',
-      budget: 2000,
-      location: 'Ksar, Nouakchott',
-      preferredTime: 'Après-midi (14h-18h)',
-      status: WorkerTaskStatus.accepted,
-      acceptedAt: DateTime.now().subtract(Duration(days: 1)),
-      isUrgent: true,
-    ),
-  ];
-
-  final List<WorkerTaskModel> _inProgressTasks = [
-    WorkerTaskModel(
-      id: '3',
-      title: 'Jardinage et taille',
-      description: 'Tonte de pelouse et taille des arbustes dans le jardin.',
-      serviceType: 'Jardinage',
-      budget: 6000,
-      location: 'Sebkha, Nouakchott',
-      preferredTime: '8:00 AM',
-      status: WorkerTaskStatus.inProgress,
-      acceptedAt: DateTime.now().subtract(Duration(days: 2)),
-      startedAt: DateTime.now().subtract(Duration(hours: 2)),
-      isUrgent: false,
-    ),
-  ];
-
-  final List<WorkerTaskModel> _completedTasks = [
-    WorkerTaskModel(
-      id: '4',
-      title: 'Peinture salon',
-      description: 'Peinture du salon avec couleur beige.',
-      serviceType: 'Peinture',
-      budget: 12000,
-      location: 'Arafat, Nouakchott',
-      preferredTime: 'Toute la journée',
-      status: WorkerTaskStatus.completed,
-      acceptedAt: DateTime.now().subtract(Duration(days: 5)),
-      startedAt: DateTime.now().subtract(Duration(days: 4)),
-      completedAt: DateTime.now().subtract(Duration(days: 2)),
-      isUrgent: false,
-    ),
-    WorkerTaskModel(
-      id: '5',
-      title: 'Garde d\'enfants',
-      description: 'Garde d\'enfants pour la soirée.',
-      serviceType: 'Garde d\'enfants',
-      budget: 7200,
-      location: 'Dar Naim, Nouakchott',
-      preferredTime: '18:00 - 23:00',
-      status: WorkerTaskStatus.completed,
-      acceptedAt: DateTime.now().subtract(Duration(days: 7)),
-      startedAt: DateTime.now().subtract(Duration(days: 6)),
-      completedAt: DateTime.now().subtract(Duration(days: 6)),
-      isUrgent: false,
-    ),
-  ];
-
-  final List<WorkerTaskModel> _cancelledTasks = [
-    WorkerTaskModel(
-      id: '6',
-      title: 'Installation électrique',
-      description: 'Installation de prises électriques supplémentaires.',
-      serviceType: 'Électricité',
-      budget: 5000,
-      location: 'Tojounin, Nouakchott',
-      preferredTime: 'À convenir',
-      status: WorkerTaskStatus.cancelled,
-      acceptedAt: DateTime.now().subtract(Duration(days: 10)),
-      isUrgent: false,
-    ),
-  ];
-}
-
-// Models
-enum WorkerTaskStatus { accepted, inProgress, completed, cancelled }
-
-class WorkerTaskModel {
-  final String id;
-  final String title;
-  final String description;
-  final String serviceType;
-  final int budget;
-  final String location;
-  final String preferredTime;
-  WorkerTaskStatus status;
-  final DateTime acceptedAt;
-  DateTime? startedAt;
-  DateTime? completedAt;
-  final bool isUrgent;
-
-  WorkerTaskModel({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.serviceType,
-    required this.budget,
-    required this.location,
-    required this.preferredTime,
-    required this.status,
-    required this.acceptedAt,
-    this.startedAt,
-    this.completedAt,
-    required this.isUrgent,
-  });
 }

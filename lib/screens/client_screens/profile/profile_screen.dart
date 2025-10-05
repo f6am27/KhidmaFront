@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../models/models.dart';
+import '../../../services/profile_service.dart';
 import '../../shared_screens/dialogs/logout_confirmation.dart';
 import '../../shared_screens/settings/change_password.dart';
 import 'widgets/profile_edit.dart';
@@ -9,9 +11,74 @@ import 'widgets/notification.dart';
 import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
 import 'widgets/favorite_providers.dart';
-import 'widgets/payment_history.dart'; // إضافة استيراد payment_history
+import 'widgets/payment_history.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
+  @override
+  _ProfileScreenState createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final ProfileService _profileService = ProfileService();
+
+  bool _isLoading = true;
+  ClientProfile? _clientProfile;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClientProfile();
+  }
+
+  Future<void> _loadClientProfile() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final result = await _profileService.getClientProfile();
+
+      if (result['ok'] == true) {
+        setState(() {
+          _clientProfile = result['clientProfile'] as ClientProfile;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage =
+              result['error'] ?? 'Erreur lors du chargement du profil';
+          _isLoading = false;
+        });
+
+        if (result['needsLogin'] == true) {
+          _showError('Session expirée, veuillez vous reconnecter');
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur réseau: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    await _loadClientProfile();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ThemeColors.errorColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,49 +95,159 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? _buildLoadingState()
+          : _errorMessage.isNotEmpty
+              ? _buildErrorState()
+              : _buildProfileContent(),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: ThemeColors.primaryColor),
+          SizedBox(height: 16),
+          Text(
+            'Chargement du profil...',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: ThemeColors.errorColor,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Erreur de chargement',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            SizedBox(height: 8),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _refreshProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Réessayer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileContent() {
+    return RefreshIndicator(
+      onRefresh: _refreshProfile,
+      color: ThemeColors.primaryColor,
+      child: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
             SizedBox(height: 20),
 
             // صورة البروفايل
-            CircleAvatar(
-              radius: 50,
-              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkSurface
-                  : Colors.grey[200],
-              child: Icon(
-                Icons.person,
-                size: 60,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? ThemeColors.darkTextSecondary
-                    : Colors.grey[600],
-              ),
-            ),
+            _buildProfilePhoto(),
             SizedBox(height: 16),
 
             // الاسم
-            Text(
-              'Fatima Al-Kharrachi',
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Client depuis Mars 2024',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            _buildProfileInfo(),
             SizedBox(height: 30),
 
             // الإحصائيات السريعة
             _buildQuickStats(context),
             SizedBox(height: 30),
 
-            // القائمة الرئيسية (بدون Mes Demandes)
+            // القائمة الرئيسية
             _buildMainMenu(context),
             SizedBox(height: 40),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProfilePhoto() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return CircleAvatar(
+      radius: 50,
+      backgroundColor: isDark ? ThemeColors.darkSurface : Colors.grey[200],
+      backgroundImage: _clientProfile?.profileImageUrl != null
+          ? NetworkImage(_clientProfile!.profileImageUrl!)
+          : null,
+      child: _clientProfile?.profileImageUrl == null
+          ? Icon(
+              Icons.person,
+              size: 60,
+              color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+            )
+          : null,
+    );
+  }
+
+  Widget _buildProfileInfo() {
+    if (_clientProfile == null) return SizedBox.shrink();
+
+    return Column(
+      children: [
+        // الاسم
+        Text(
+          _clientProfile!.fullName,
+          style: Theme.of(context).textTheme.displaySmall,
+        ),
+        SizedBox(height: 4),
+
+        // عضو منذ
+        Text(
+          'Client depuis ${_clientProfile!.memberSince}',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+
+        // المنطقة (إذا موجودة)
+        if (_clientProfile!.address != null &&
+            _clientProfile!.address!.isNotEmpty) ...[
+          SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: Colors.grey[600],
+              ),
+              SizedBox(width: 4),
+              Text(
+                _clientProfile!.address!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -94,10 +271,16 @@ class ProfileScreen extends StatelessWidget {
       child: Row(
         children: [
           _buildStatItem(
-              context, '12', 'Demandes\nPubliées', Icons.work_outline),
+              context,
+              _clientProfile?.totalTasksPublished.toString() ?? '0',
+              'Demandes\nPubliées',
+              Icons.work_outline),
           _buildDivider(context),
           _buildStatItem(
-              context, '8', 'Services\nTerminés', Icons.check_circle_outline),
+              context,
+              _clientProfile?.totalTasksCompleted.toString() ?? '0',
+              'Services\nTerminés',
+              Icons.check_circle_outline),
         ],
       ),
     );
@@ -177,7 +360,6 @@ class ProfileScreen extends StatelessWidget {
             title: 'Historique des Paiements',
             subtitle: 'Vos transactions et factures',
             onTap: () {
-              // إضافة التنقل إلى صفحة payment_history
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -282,17 +464,21 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _navigateToSettings(BuildContext context) {
-    Navigator.push(
+  void _navigateToSettings(BuildContext context) async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SettingsScreen(),
       ),
     );
+
+    if (result == true) {
+      _refreshProfile();
+    }
   }
 }
 
-// صفحة الإعدادات (بدون تغيير)
+// صفحة الإعدادات
 class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -305,21 +491,23 @@ class SettingsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 20),
-
-            // قسم الحساب
             _buildSectionTitle(context, 'Votre compte'),
             _buildSettingsItem(
               context: context,
               icon: Icons.person_outline,
               title: 'Modifier le Profil',
               subtitle: 'Photo, nom, informations personnelles',
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => ProfileEditScreen(),
                   ),
                 );
+
+                if (result == true) {
+                  Navigator.pop(context, true);
+                }
               },
             ),
             _buildSettingsItem(
@@ -337,8 +525,6 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             SizedBox(height: 30),
-
-            // قسم التفضيلات
             _buildSectionTitle(context, 'Préférences'),
             _buildSettingsItem(
               context: context,
@@ -369,10 +555,7 @@ class SettingsScreen extends StatelessWidget {
                 );
               },
             ),
-
             SizedBox(height: 30),
-
-            // قسم الدعم
             _buildSectionTitle(context, 'Support'),
             _buildSettingsItem(
               context: context,

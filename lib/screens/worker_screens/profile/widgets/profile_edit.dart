@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/theme_colors.dart';
+import '../../../../models/models.dart';
+import '../../../../services/profile_service.dart';
+import '../../../../services/category_service.dart';
 
 class WorkerProfileEditScreen extends StatefulWidget {
   @override
@@ -12,6 +15,8 @@ class WorkerProfileEditScreen extends StatefulWidget {
 
 class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
   final _formKey = GlobalKey<FormState>();
+  final ProfileService _profileService = ProfileService();
+  final CategoryService _categoryService = CategoryService();
 
   // Controllers
   final _nameController = TextEditingController();
@@ -21,18 +26,32 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
   final _areaController = TextEditingController();
   final _descController = TextEditingController();
 
-  // Data from WorkerOnboardingScreen
+  // State variables
+  bool _isLoading = true;
+  bool _isSaving = false;
+  WorkerProfile? _workerProfile;
+  List<ServiceCategory> _categories = [];
+  List<NouakchottArea> _areas = [];
+  File? _avatarFile;
+
+  // Selected values
+  int? _selectedCategoryId;
   String? _selectedCategory;
-  final List<String> _categories = const [
-    'Électricien',
-    'Plombier',
-    'Peinture',
-    'Jardinier',
-    'Garde d\'enfants',
-    'Ménage',
-    'Menuisier',
-    'Autre',
-  ];
+  String? _selectedArea;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  final Set<String> _selectedDays = {};
+
+  // Available days mapping for backend compatibility
+  final Map<String, String> _dayMapping = {
+    'Lun': 'monday',
+    'Mar': 'tuesday',
+    'Mer': 'wednesday',
+    'Jeu': 'thursday',
+    'Ven': 'friday',
+    'Sam': 'saturday',
+    'Dim': 'sunday',
+  };
 
   final List<String> _days = const [
     'Lun',
@@ -43,30 +62,11 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
     'Sam',
     'Dim'
   ];
-  final Set<String> _selectedDays = {'Lun', 'Mar', 'Mer', 'Jeu', 'Ven'};
-
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
-  File? _avatarFile;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentData();
-  }
-
-  void _loadCurrentData() {
-    // هنا سيتم تحميل البيانات الحالية للعامل
-    _nameController.text = 'Mohamed Ould Ahmed';
-    _phoneController.text = '32 92 12 88';
-    _emailController.text = 'mohamed@example.com';
-    _priceController.text = '3000';
-    _areaController.text = 'Ksar, Nouakchott';
-    _descController.text =
-        'Plombier et électricien expérimenté avec plus de 5 ans d\'expérience';
-    _selectedCategory = 'Plombier';
-    _startTime = TimeOfDay(hour: 8, minute: 0);
-    _endTime = TimeOfDay(hour: 18, minute: 0);
+    _loadData();
   }
 
   @override
@@ -80,11 +80,108 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
     super.dispose();
   }
 
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Load profile data and categories/areas in parallel
+      final results = await Future.wait([
+        _profileService.getWorkerProfile(),
+        _categoryService.getCombinedData(),
+      ]);
+
+      final profileResult = results[0] as Map<String, dynamic>;
+      final dataResult = results[1] as Map<String, dynamic>;
+
+      if (profileResult['ok'] == true) {
+        _workerProfile = profileResult['workerProfile'] as WorkerProfile;
+        _populateFormFields();
+      } else {
+        _showError(
+            'Erreur lors du chargement du profil: ${profileResult['error']}');
+      }
+
+      if (dataResult['ok'] == true) {
+        _categories = dataResult['categories'] as List<ServiceCategory>;
+        _areas = dataResult['areas'] as List<NouakchottArea>;
+        _updateCategorySelection();
+      } else {
+        _showError(
+            'Erreur lors du chargement des données: ${dataResult['error']}');
+      }
+    } catch (e) {
+      _showError('Erreur réseau: $e');
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  void _populateFormFields() {
+    if (_workerProfile == null) return;
+
+    final profile = _workerProfile!;
+
+    _nameController.text =
+        '${profile.firstName ?? ''} ${profile.lastName ?? ''}'.trim();
+    _phoneController.text = profile.phone;
+    _priceController.text = profile.basePrice.toString();
+    _areaController.text = profile.serviceArea;
+    _descController.text = profile.bio;
+    _selectedCategory = profile.serviceCategory;
+    _selectedArea = profile.serviceArea;
+
+    // Parse work times
+    _startTime = _parseTimeString(profile.workStartTime);
+    _endTime = _parseTimeString(profile.workEndTime);
+
+    // Parse available days - convert from backend format to display format
+    _selectedDays.clear();
+    for (final backendDay in profile.availableDays) {
+      final displayDay = _dayMapping.entries
+          .firstWhere((entry) => entry.value == backendDay,
+              orElse: () => const MapEntry('', ''))
+          .key;
+      if (displayDay.isNotEmpty) {
+        _selectedDays.add(displayDay);
+      }
+    }
+  }
+
+  void _updateCategorySelection() {
+    if (_selectedCategory != null && _categories.isNotEmpty) {
+      final category = _categories.firstWhere(
+        (cat) => cat.name == _selectedCategory,
+        orElse: () => _categories.first,
+      );
+      _selectedCategoryId = category.id;
+    }
+  }
+
+  TimeOfDay? _parseTimeString(String timeStr) {
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        return TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        );
+      }
+    } catch (e) {
+      print('Error parsing time: $timeStr');
+    }
+    return null;
+  }
+
   String _formatTime(TimeOfDay? time) {
     if (time == null) return '--:--';
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  String _formatTimeForBackend(TimeOfDay? time) {
+    if (time == null) return '08:00';
+    return _formatTime(time);
   }
 
   Future<void> _pickTime({required bool isStart}) async {
@@ -107,18 +204,125 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
   Future<void> _pickAvatar() async {
     try {
       final picker = ImagePicker();
-      final image =
-          await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
       if (image != null) {
         setState(() => _avatarFile = File(image.path));
+        // Auto-upload the image
+        await _uploadProfileImage();
       }
     } on PlatformException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Impossible d\'ouvrir la galerie: ${e.message ?? ''}'),
-        ),
-      );
+      _showError('Impossible d\'ouvrir la galerie: ${e.message ?? ''}');
     }
+  }
+
+  Future<void> _uploadProfileImage() async {
+    if (_avatarFile == null) return;
+
+    try {
+      final result = await _profileService.uploadProfileImage(_avatarFile!);
+
+      if (result['ok'] == true) {
+        _showSuccess('Photo de profil mise à jour');
+        // إعادة تحميل البيانات المحدثة من الخادم
+        await _loadData();
+      } else {
+        _showError('Erreur lors du téléchargement: ${result['error']}');
+      }
+    } catch (e) {
+      _showError('Erreur réseau: $e');
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedDays.isEmpty) {
+      _showError('Veuillez sélectionner vos jours disponibles');
+      return;
+    }
+
+    if (_startTime == null || _endTime == null) {
+      _showError('Veuillez choisir votre plage horaire');
+      return;
+    }
+
+    if (_selectedCategoryId == null) {
+      _showError('Veuillez choisir une catégorie de service');
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      // Parse full name
+      final fullName = _nameController.text.trim();
+      final nameParts = fullName.split(' ');
+      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      final lastName = nameParts.length > 1 ? nameParts.skip(1).join(' ') : '';
+
+      // Convert selected days to backend format
+      final backendDays = _selectedDays
+          .map((day) => _dayMapping[day])
+          .where((day) => day != null)
+          .cast<String>()
+          .toList();
+
+      final result = await _profileService.updateWorkerProfile(
+        firstName: firstName,
+        lastName: lastName.isEmpty ? null : lastName,
+        bio: _descController.text.trim(),
+        serviceArea: _areaController.text.trim(),
+        serviceCategory: _selectedCategory,
+        basePrice: double.tryParse(_priceController.text.trim()),
+        availableDays: backendDays,
+        workStartTime: _formatTimeForBackend(_startTime),
+        workEndTime: _formatTimeForBackend(_endTime),
+        isAvailable: true,
+      );
+
+      if (result['ok'] == true) {
+        _showSuccess('Profil mis à jour avec succès');
+        Navigator.pop(context, true); // Return true to indicate success
+      } else {
+        if (result['needsLogin'] == true) {
+          _showError('Veuillez vous reconnecter');
+          // TODO: Navigate to login screen
+        } else {
+          _showError('Erreur: ${result['error']}');
+        }
+      }
+    } catch (e) {
+      _showError('Erreur réseau: $e');
+    }
+
+    setState(() => _isSaving = false);
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ThemeColors.errorColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ThemeColors.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override
@@ -134,46 +338,61 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: 20),
+      body: _isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: ThemeColors.primaryColor),
+                  SizedBox(height: 16),
+                  Text(
+                    'Chargement du profil...',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 20),
 
-                // Photo de profil
-                _buildProfilePhoto(context, isDark),
-                SizedBox(height: 30),
+                      // Photo de profil
+                      _buildProfilePhoto(context, isDark),
+                      SizedBox(height: 30),
 
-                // Informations personnelles
-                _buildSectionTitle(context, 'Informations personnelles'),
-                SizedBox(height: 16),
-                _buildPersonalInfoFields(context, isDark),
-                SizedBox(height: 30),
+                      // Informations personnelles
+                      _buildSectionTitle(context, 'Informations personnelles'),
+                      SizedBox(height: 16),
+                      _buildPersonalInfoFields(context, isDark),
+                      SizedBox(height: 30),
 
-                // Informations professionnelles
-                _buildSectionTitle(context, 'Informations professionnelles'),
-                SizedBox(height: 16),
-                _buildProfessionalInfoFields(context, isDark),
-                SizedBox(height: 30),
+                      // Informations professionnelles
+                      _buildSectionTitle(
+                          context, 'Informations professionnelles'),
+                      SizedBox(height: 16),
+                      _buildProfessionalInfoFields(context, isDark),
+                      SizedBox(height: 30),
 
-                // Disponibilité
-                _buildSectionTitle(context, 'Disponibilité'),
-                SizedBox(height: 16),
-                _buildAvailabilityFields(context, isDark),
-                SizedBox(height: 40),
+                      // Disponibilité
+                      _buildSectionTitle(context, 'Disponibilité'),
+                      SizedBox(height: 16),
+                      _buildAvailabilityFields(context, isDark),
+                      SizedBox(height: 40),
 
-                // Bouton de mise à jour
-                _buildUpdateButton(context),
-                SizedBox(height: 20),
-              ],
+                      // Bouton de mise à jour
+                      _buildUpdateButton(context),
+                      SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -185,17 +404,21 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
             radius: 60,
             backgroundColor:
                 isDark ? ThemeColors.darkSurface : Colors.grey[200],
-            backgroundImage:
-                _avatarFile != null ? FileImage(_avatarFile!) : null,
-            child: _avatarFile == null
-                ? Icon(
-                    Icons.person,
-                    size: 70,
-                    color: isDark
-                        ? ThemeColors.darkTextSecondary
-                        : Colors.grey[600],
-                  )
-                : null,
+            backgroundImage: _avatarFile != null
+                ? FileImage(_avatarFile!)
+                : (_workerProfile?.profileImageUrl != null
+                    ? NetworkImage(_workerProfile!.profileImageUrl!)
+                    : null) as ImageProvider?,
+            child:
+                (_avatarFile == null && _workerProfile?.profileImageUrl == null)
+                    ? Icon(
+                        Icons.person,
+                        size: 70,
+                        color: isDark
+                            ? ThemeColors.darkTextSecondary
+                            : Colors.grey[600],
+                      )
+                    : null,
           ),
           Positioned(
             bottom: 0,
@@ -241,7 +464,7 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Nom
+        // Nom complet
         _buildFieldLabel(context, 'Nom complet'),
         SizedBox(height: 8),
         _buildTextField(
@@ -255,25 +478,7 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
         ),
         SizedBox(height: 20),
 
-        // Email
-        _buildFieldLabel(context, 'Email'),
-        SizedBox(height: 8),
-        _buildTextField(
-          controller: _emailController,
-          keyboardType: TextInputType.emailAddress,
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'L\'email est requis';
-            }
-            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-              return 'Email invalide';
-            }
-            return null;
-          },
-        ),
-        SizedBox(height: 20),
-
-        // Téléphone
+        // Téléphone (read-only)
         _buildFieldLabel(context, 'Numéro de téléphone'),
         SizedBox(height: 8),
         _buildPhoneField(),
@@ -288,19 +493,25 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
         // Catégorie
         _buildFieldLabel(context, 'Catégorie de service'),
         SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
+        DropdownButtonFormField<int>(
+          value: _selectedCategoryId,
           items: _categories
-              .map((category) => DropdownMenuItem<String>(
-                    value: category,
-                    child: Text(category),
+              .map((category) => DropdownMenuItem<int>(
+                    value: category.id,
+                    child: Text(category.name),
                   ))
               .toList(),
-          onChanged: (value) => setState(() => _selectedCategory = value),
+          onChanged: (value) {
+            setState(() {
+              _selectedCategoryId = value;
+              final category = _categories.firstWhere((cat) => cat.id == value);
+              _selectedCategory = category.name;
+            });
+          },
           decoration: _buildInputDecoration(),
           style: Theme.of(context).textTheme.bodyLarge,
           validator: (value) {
-            if (value == null || value.isEmpty) {
+            if (value == null) {
               return 'Veuillez choisir une catégorie';
             }
             return null;
@@ -321,22 +532,41 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
             if (value == null || value.trim().isEmpty) {
               return 'Veuillez entrer un tarif';
             }
+            final price = double.tryParse(value.replaceAll(',', '.'));
+            if (price == null || price <= 0) {
+              return 'Tarif invalide';
+            }
             return null;
           },
         ),
         SizedBox(height: 20),
 
-        // Zone d'intervention
+// Zone d'intervention
         _buildFieldLabel(context, 'Zone d\'intervention'),
         SizedBox(height: 8),
-        _buildTextField(
-          controller: _areaController,
+        DropdownButtonFormField<String>(
+          value: _selectedArea,
+          items: _areas
+              .map((area) => DropdownMenuItem<String>(
+                    value: area.name,
+                    child: Text(area.name),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedArea = value;
+              _areaController.text = value ?? '';
+            });
+          },
+          decoration: _buildInputDecoration(),
+          style: Theme.of(context).textTheme.bodyLarge,
           validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Veuillez entrer la zone de service';
+            if (value == null || value.isEmpty) {
+              return 'Veuillez choisir une zone';
             }
             return null;
           },
+          hint: Text('Sélectionner une zone'),
         ),
         SizedBox(height: 20),
 
@@ -349,6 +579,9 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
               return 'Veuillez décrire votre service';
+            }
+            if (value.trim().length < 20) {
+              return 'La description doit contenir au moins 20 caractères';
             }
             return null;
           },
@@ -546,37 +779,18 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
   }
 
   Widget _buildPhoneField() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
       style: Theme.of(context).textTheme.bodyLarge,
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Le numéro de téléphone est requis';
-        }
-        return null;
-      },
+      readOnly: true, // Phone cannot be changed
       decoration: _buildInputDecoration().copyWith(
-        suffixIcon: TextButton(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                    'Fonctionnalité de changement en cours de développement'),
-                backgroundColor: ThemeColors.primaryColor,
-              ),
-            );
-          },
-          child: Text(
-            'Changer',
-            style: TextStyle(
-              color: ThemeColors.primaryColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        suffixIcon: Icon(
+          Icons.lock_outline,
+          color: Colors.grey,
+          size: 20,
         ),
+        fillColor: Colors.grey[100],
       ),
     );
   }
@@ -628,7 +842,7 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: _updateProfile,
+        onPressed: _isSaving ? null : _updateProfile,
         style: ElevatedButton.styleFrom(
           backgroundColor: ThemeColors.primaryColor,
           foregroundColor: Colors.white,
@@ -636,54 +850,38 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
           ),
+          disabledBackgroundColor: Colors.grey[400],
         ),
-        child: Text(
-          'Mettre à jour le profil',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        child: _isSaving
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Mise à jour...',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                'Mettre à jour le profil',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
       ),
     );
-  }
-
-  void _updateProfile() {
-    if (_formKey.currentState!.validate()) {
-      if (_selectedDays.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Veuillez sélectionner vos jours disponibles'),
-            backgroundColor: ThemeColors.errorColor,
-          ),
-        );
-        return;
-      }
-
-      if (_startTime == null || _endTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Veuillez choisir votre plage horaire'),
-            backgroundColor: ThemeColors.errorColor,
-          ),
-        );
-        return;
-      }
-
-      // TODO: Ici nous enverrons les données mises à jour au serveur
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Profil mis à jour avec succès'),
-          backgroundColor: ThemeColors.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-
-      Navigator.pop(context);
-    }
   }
 }

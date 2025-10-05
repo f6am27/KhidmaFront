@@ -1,4 +1,4 @@
-// lib/models/worker_profile_model.dart
+// lib/models/worker_profile_model.dart - Fixed version
 class WorkerProfile {
   final int id;
   final String phone;
@@ -90,18 +90,47 @@ class WorkerProfile {
         isLocationFresh;
   }
 
-  // From JSON
+  // FIXED: From JSON to handle nested user object
   factory WorkerProfile.fromJson(Map<String, dynamic> json) {
+    // Extract user data from nested object
+    final userData = json['user'] as Map<String, dynamic>? ?? {};
+
+    // Format member_since from user creation date
+    String memberSince = '';
+    if (userData['created_at'] != null) {
+      try {
+        final createdAt = DateTime.parse(userData['created_at']);
+        final months = [
+          '',
+          'janvier',
+          'février',
+          'mars',
+          'avril',
+          'mai',
+          'juin',
+          'juillet',
+          'août',
+          'septembre',
+          'octobre',
+          'novembre',
+          'décembre'
+        ];
+        memberSince = '${months[createdAt.month]} ${createdAt.year}';
+      } catch (e) {
+        memberSince = 'Récemment';
+      }
+    }
+
     return WorkerProfile(
       id: json['id'] ?? 0,
-      phone: json['phone'] ?? '',
-      firstName: json['first_name'],
-      lastName: json['last_name'],
+      phone: userData['display_identifier'] ?? '',
+      firstName: userData['first_name'],
+      lastName: userData['last_name'],
       bio: json['bio'] ?? '',
       serviceArea: json['service_area'] ?? '',
       serviceCategory: json['service_category'] ?? '',
       basePrice: double.tryParse(json['base_price']?.toString() ?? '0') ?? 0.0,
-      profileImageUrl: json['profile_image_url'],
+      profileImageUrl: json['profile_image'],
       availableDays: List<String>.from(json['available_days'] ?? []),
       workStartTime: json['work_start_time'] ?? '08:00',
       workEndTime: json['work_end_time'] ?? '18:00',
@@ -121,7 +150,7 @@ class WorkerProfile {
       lastSeen: json['last_seen'] != null
           ? DateTime.tryParse(json['last_seen'])
           : null,
-      memberSince: json['member_since'] ?? '',
+      memberSince: memberSince,
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       locationSharingEnabled: json['location_sharing_enabled'] ?? false,
