@@ -1,35 +1,26 @@
 // lib/services/service_category_mapper.dart
+import '../models/service_category_model.dart';
 
-/// Maps service type names to their corresponding category IDs in the backend
 class ServiceCategoryMapper {
-  static const Map<String, int> _serviceTypeToId = {
-    'Nettoyage': 1,
-    'Plomberie': 2,
-    'Électricité': 3,
-    'Jardinage': 4,
-    'Peinture': 5,
-    'Déménagement': 6,
-    'Réparation': 7,
-    'Cuisine': 8,
-    'Autre': 9,
-  };
+  static Map<String, int> _serviceTypeToId = {};
 
-  /// Get category ID from service type name
+  /// تهيئة الـ mapping من الـ categories المسحوبة من Backend
+  static void initialize(List<ServiceCategory> categories) {
+    _serviceTypeToId = {for (var cat in categories) cat.name: cat.id};
+  }
+
   static int? getCategoryId(String serviceType) {
     return _serviceTypeToId[serviceType];
   }
 
-  /// Get service type name from category ID
   static String? getServiceType(int categoryId) {
-    return _serviceTypeToId.entries
-        .firstWhere(
-          (entry) => entry.value == categoryId,
-          orElse: () => const MapEntry('Autre', 9),
-        )
-        .key;
+    final entry = _serviceTypeToId.entries.firstWhere(
+      (entry) => entry.value == categoryId,
+      orElse: () => MapEntry('', 0),
+    );
+    return entry.key.isNotEmpty ? entry.key : null;
   }
 
-  /// Check if service type exists
   static bool isValidServiceType(String serviceType) {
     return _serviceTypeToId.containsKey(serviceType);
   }

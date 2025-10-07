@@ -434,11 +434,22 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
+  // ✨ الدالة المعدلة - هنا الحل! ✨
   void _confirmLocation() {
     if (_selectedLocation != null) {
-      // إرجاع البيانات للشاشة السابقة
+      // تقريب الإحداثيات إلى 7 منازل عشرية (يتوافق مع الباك إند)
+      double roundedLatitude =
+          double.parse(_selectedLocation!.latitude.toStringAsFixed(7));
+      double roundedLongitude =
+          double.parse(_selectedLocation!.longitude.toStringAsFixed(7));
+
+      print(
+          'Original coordinates: ${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}');
+      print('Rounded coordinates: $roundedLatitude, $roundedLongitude');
+
+      // إرجاع البيانات مع الإحداثيات المقربة
       Navigator.pop(context, {
-        'coordinates': _selectedLocation,
+        'coordinates': LatLng(roundedLatitude, roundedLongitude),
         'address': _currentAddress,
       });
     }

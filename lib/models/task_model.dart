@@ -75,6 +75,7 @@ class TaskModel {
   final int? providerRating;
   final bool isUrgent;
   final LatLng? coordinates;
+  final String? timeDescription; // أضف هذا
 
   TaskModel({
     required this.id,
@@ -91,6 +92,7 @@ class TaskModel {
     this.providerRating,
     this.isUrgent = false,
     this.coordinates,
+    this.timeDescription, // أضف هذا
   });
 
   /// Create from Backend JSON response
@@ -134,6 +136,7 @@ class TaskModel {
               : null),
       isUrgent: json['isUrgent'] ?? json['is_urgent'] ?? false,
       coordinates: coords,
+      timeDescription: json['timeDescription'] ?? json['time_description'],
     );
   }
 

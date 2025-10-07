@@ -116,7 +116,6 @@ class TaskService {
         endpoint: endpoint,
       );
 
-      // ════════ ADD DETAILED LOGGING ════════
       print('════════ GET MY TASKS ════════');
       print('Status Code: ${response.statusCode}');
       print('Response Body: ${response.body}');
@@ -125,28 +124,22 @@ class TaskService {
       final json = _parseResponse(response);
 
       print('Parsed JSON type: ${json.runtimeType}');
-      print('Parsed JSON: $json');
 
       if (response.statusCode == 200) {
         List<dynamic> tasksData = [];
 
         // Try different response formats
         if (json is List) {
-          print('Response is a List');
+          print('✅ Response is a List');
           tasksData = json;
         } else if (json is Map) {
           print('Response is a Map');
           if (json['results'] != null) {
-            print('Found results key');
             tasksData = json['results'] as List;
           } else if (json['data'] != null) {
-            print('Found data key');
             tasksData = json['data'] as List;
           } else if (json['tasks'] != null) {
-            print('Found tasks key');
             tasksData = json['tasks'] as List;
-          } else {
-            print('No known array key found. Keys: ${json.keys}');
           }
         }
 
@@ -155,21 +148,35 @@ class TaskService {
         final tasks = <TaskModel>[];
         for (var i = 0; i < tasksData.length; i++) {
           try {
-            final taskJson = tasksData[i] as Map<String, dynamic>;
-            print(
-                'Processing task $i: ${taskJson['id']} - ${taskJson['title']}');
+            print('════════ TASK $i ════════');
+            print('Task data type: ${tasksData[i].runtimeType}');
+
+            // التحقق من أن العنصر هو Map
+            if (tasksData[i] is! Map) {
+              print(
+                  '❌ Task $i is NOT a Map! Type: ${tasksData[i].runtimeType}');
+              print('Data: ${tasksData[i]}');
+              continue;
+            }
+
+            final taskJson = Map<String, dynamic>.from(tasksData[i]);
+            print('✅ Task ${taskJson['id']} - ${taskJson['title']}');
+
             tasks.add(TaskModel.fromJson(taskJson));
+            print('✅ Parsed successfully');
           } catch (e, stackTrace) {
-            print('Error parsing task $i: $e');
+            print('❌ Error parsing task $i: $e');
             print('StackTrace: $stackTrace');
-            print('Task data: ${tasksData[i]}');
           }
+          print('═════════════════════════');
         }
+
+        print('✅ Total tasks parsed: ${tasks.length}');
 
         return {
           'ok': true,
           'tasks': tasks,
-          'count': json['count'] ?? tasks.length,
+          'count': tasks.length,
           'json': json,
         };
       } else {
@@ -257,7 +264,12 @@ class TaskService {
 
       if (title != null) body['title'] = title;
       if (description != null) body['description'] = description;
-      if (serviceType != null) body['serviceType'] = serviceType;
+      if (serviceType != null) {
+        final categoryId = ServiceCategoryMapper.getCategoryId(serviceType);
+        if (categoryId != null) {
+          body['service_category_id'] = categoryId;
+        }
+      }
       if (budget != null) body['budget'] = budget;
       if (location != null) body['location'] = location;
       if (preferredTime != null) body['preferredTime'] = preferredTime;

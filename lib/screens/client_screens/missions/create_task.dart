@@ -4,6 +4,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
+import '../../../services/category_service.dart';
+import '../../../services/service_category_mapper.dart';
+
 import '../onboarding/client_location_permission_screen.dart';
 import 'location_picker_screen.dart';
 
@@ -21,6 +24,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _budgetController = TextEditingController();
+  late FixedExtentScrollController _hourController;
+  late FixedExtentScrollController _minuteController;
 
   String _selectedServiceType = 'Nettoyage';
   String _selectedLocation = 'Tevragh Zeina';
@@ -33,36 +38,9 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   String? _currentLocationAddress;
   LatLng? _selectedCoordinates;
   bool _isUrgent = false;
-
-  final Map<String, Map<String, dynamic>> _serviceTypes = {
-    'Nettoyage': {'icon': Icons.cleaning_services, 'color': Colors.blue},
-    'Plomberie': {'icon': Icons.plumbing, 'color': Colors.indigo},
-    'Électricité': {'icon': Icons.electrical_services, 'color': Colors.amber},
-    'Jardinage': {'icon': Icons.grass, 'color': Colors.green},
-    'Peinture': {'icon': Icons.format_paint, 'color': Colors.purple},
-    'Déménagement': {'icon': Icons.local_shipping, 'color': Colors.orange},
-    'Réparation': {'icon': Icons.build, 'color': Colors.red},
-    'Cuisine': {'icon': Icons.restaurant, 'color': Colors.brown},
-    'Autre': {'icon': Icons.work_outline, 'color': Colors.grey},
-  };
-
-  final List<String> _nouakchottAreas = [
-    'Tevragh Zeina',
-    'Ksar',
-    'Sebkha',
-    'Arafat',
-    'Dar Naim',
-    'El Mina',
-    'Toujounine',
-    'Riyadh',
-    'Hay Saken',
-    'Socogim',
-    'Basra',
-    'Dubai',
-    'Melah',
-    'Sixième',
-    'Cinquième',
-  ];
+  List<ServiceCategory> _categories = [];
+  List<NouakchottArea> _areas = [];
+  bool _isLoadingData = true;
 
   final List<String> _timeDescriptions = [
     'Ce matin',
@@ -75,29 +53,133 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     'Le week-end',
     'Quand vous voulez',
   ];
-
   @override
   void initState() {
     super.initState();
+
+    _hourController =
+        FixedExtentScrollController(initialItem: _selectedHour - 1);
+    _minuteController =
+        FixedExtentScrollController(initialItem: _selectedMinute ~/ 5);
+
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadCategories(),
+      _loadAreas(),
+    ]);
+
     if (widget.taskToEdit != null) {
-      _fillFormWithTaskData();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fillFormWithTaskData();
+      });
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    final result = await categoryService.getServiceCategories();
+    if (result['ok'] && mounted) {
+      setState(() {
+        _categories = result['categories'] as List<ServiceCategory>;
+        ServiceCategoryMapper.initialize(_categories);
+
+        if (_categories.isNotEmpty && _selectedServiceType.isEmpty) {
+          _selectedServiceType = _categories.first.name;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadAreas() async {
+    final result = await categoryService.getNouakchottAreas(simple: true);
+    if (result['ok'] && mounted) {
+      setState(() {
+        _areas = result['areas'] as List<NouakchottArea>;
+        if (_areas.isNotEmpty && _selectedLocation.isEmpty) {
+          _selectedLocation = _areas.first.name;
+        }
+        _isLoadingData = false;
+      });
     }
   }
 
   void _fillFormWithTaskData() {
     final task = widget.taskToEdit!;
+
     _titleController.text = task.title;
     _descriptionController.text = task.description;
     _budgetController.text = task.budget.toString();
     _selectedLocation = task.location.split(', ').first;
-    _selectedServiceType = task.serviceType;
+// نوع الخدمة - البحث المرن
+    if (_categories.any((cat) => cat.name == task.serviceType)) {
+      _selectedServiceType = task.serviceType;
+      print('✅ Service type exact match: $_selectedServiceType');
+    } else {
+      final firstWord = task.serviceType.split(' ').first;
+      print(
+          '🔍 Trying to match: "${task.serviceType}" → first word: "$firstWord"');
+
+      final match = _categories.firstWhere(
+        (cat) => cat.name.startsWith(firstWord),
+        orElse: () => _categories.isNotEmpty
+            ? _categories.first
+            : throw Exception('No categories loaded'),
+      );
+      _selectedServiceType = match.name;
+      print('✅ Service type matched: "$_selectedServiceType"');
+    }
+
+    // الاستعجال
     _isUrgent = task.isUrgent;
+    print('✅ IsUrgent filled: $_isUrgent');
+
+    // الإحداثيات
     _selectedCoordinates = task.coordinates;
 
     if (task.coordinates != null) {
       _isUsingCurrentLocation = true;
       _currentLocationAddress = task.location;
     }
+
+    // ملء الوقت
+    if (task.preferredTime.isNotEmpty) {
+      try {
+        final timeParts = task.preferredTime.trim().split(' ');
+        if (timeParts.length == 2) {
+          final hourMinute = timeParts[0].split(':');
+          if (hourMinute.length == 2) {
+            int hour = int.parse(hourMinute[0]);
+            int minute = int.parse(hourMinute[1]);
+            String period = timeParts[1].toUpperCase();
+
+            _isAM = (period == 'AM');
+            _selectedHour = (hour == 0) ? 12 : ((hour > 12) ? hour - 12 : hour);
+            _selectedMinute = (minute ~/ 5) * 5;
+
+            _hourController.jumpToItem(_selectedHour - 1);
+            _minuteController.jumpToItem(_selectedMinute ~/ 5);
+
+            print(
+                '✅ Time filled: $_selectedHour:$_selectedMinute ${_isAM ? "AM" : "PM"}');
+          }
+        }
+      } catch (e) {
+        print('⚠️ Error parsing time: $e');
+      }
+    }
+
+    // وصف الوقت
+    if (task.timeDescription != null &&
+        _timeDescriptions.contains(task.timeDescription)) {
+      _selectedTimeDescription = task.timeDescription!;
+      print('✅ TimeDescription filled: $_selectedTimeDescription');
+    } else {
+      print('⚠️ timeDescription is null or not in list, using default');
+    }
+
+    setState(() {});
   }
 
   @override
@@ -276,16 +358,17 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           height: 100,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: _serviceTypes.length,
+            itemCount: _categories.length,
             itemBuilder: (context, index) {
-              final entry = _serviceTypes.entries.elementAt(index);
-              final isSelected = _selectedServiceType == entry.key;
-              final serviceColor = entry.value['color'] as Color;
+              final category = _categories[index];
+              final isSelected = _selectedServiceType == category.name;
+              final serviceColor = _getCategoryColor(category.name);
 
               return Container(
                 margin: EdgeInsets.only(right: 8),
                 child: GestureDetector(
-                  onTap: () => setState(() => _selectedServiceType = entry.key),
+                  onTap: () =>
+                      setState(() => _selectedServiceType = category.name),
                   child: AnimatedContainer(
                     duration: Duration(milliseconds: 200),
                     width: 80,
@@ -308,13 +391,13 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          entry.value['icon'] as IconData,
+                          _getCategoryIcon(category.icon),
                           color: isSelected ? serviceColor : Colors.grey[600],
                           size: 24,
                         ),
                         SizedBox(height: 6),
                         Text(
-                          entry.key,
+                          category.name,
                           style: TextStyle(
                             color: isSelected
                                 ? serviceColor
@@ -562,10 +645,10 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               : (String? newValue) {
                   setState(() => _selectedLocation = newValue!);
                 },
-          items: _nouakchottAreas.map<DropdownMenuItem<String>>((String area) {
+          items: _areas.map<DropdownMenuItem<String>>((area) {
             return DropdownMenuItem<String>(
-              value: area,
-              child: Text(area),
+              value: area.name,
+              child: Text(area.name),
             );
           }).toList(),
         ),
@@ -665,6 +748,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 SizedBox(height: 8),
                 Expanded(
                   child: ListWheelScrollView.useDelegate(
+                    controller: _hourController,
                     itemExtent: 50,
                     perspective: 0.005,
                     diameterRatio: 1.2,
@@ -722,6 +806,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 SizedBox(height: 8),
                 Expanded(
                   child: ListWheelScrollView.useDelegate(
+                    controller: _minuteController,
                     itemExtent: 50,
                     perspective: 0.005,
                     diameterRatio: 1.2,
@@ -1183,6 +1268,57 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         );
       }
     }
+  }
+
+  Color _getCategoryColor(String categoryName) {
+    final colors = {
+      'Nettoyage Maison': Colors.blue,
+      'Nettoyage Tapis': Colors.lightBlue,
+      'Plomberie': Colors.indigo,
+      'Électricité': Colors.amber,
+      'Jardinage': Colors.green,
+      'Peinture': Colors.purple,
+      'Déménagement': Colors.orange,
+      'Réparation Téléphone': Colors.red,
+      'Cuisine Quotidienne': Colors.brown,
+    };
+    return colors[categoryName] ?? Colors.grey;
+  }
+
+  IconData _getCategoryIcon(String icon) {
+    final icons = {
+      'cleaning_services': Icons.cleaning_services,
+      'local_laundry_service': Icons.local_laundry_service,
+      'grass': Icons.grass,
+      'pets': Icons.pets,
+      'child_care': Icons.child_care,
+      'school': Icons.school,
+      'plumbing': Icons.plumbing,
+      'electrical_services': Icons.electrical_services,
+      'ac_unit': Icons.ac_unit,
+      'phone_android': Icons.phone_android,
+      'computer': Icons.computer,
+      'build': Icons.build,
+      'format_paint': Icons.format_paint,
+      'construction': Icons.construction,
+      'carpenter': Icons.carpenter,
+      'delivery_dining': Icons.delivery_dining,
+      'local_shipping': Icons.local_shipping,
+      'drive_eta': Icons.drive_eta,
+      'flight': Icons.flight,
+      'restaurant': Icons.restaurant,
+      'cake': Icons.cake,
+      'celebration': Icons.celebration,
+      'handyman': Icons.handyman,
+      'content_cut': Icons.content_cut,
+      'face': Icons.face,
+      'brush': Icons.brush,
+      'photo_camera': Icons.photo_camera,
+      'video_call': Icons.video_call,
+      'web': Icons.web,
+      'support': Icons.support,
+    };
+    return icons[icon] ?? Icons.work_outline;
   }
 
   @override
