@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/colors.dart';
+import '../../../services/location_service.dart';
 
 enum UserType { worker, client }
 
@@ -257,7 +258,25 @@ class _LocationPermissionBaseScreenState
     _showLoadingDialog();
 
     try {
-      await Future.delayed(const Duration(seconds: 2));
+      // طلب صلاحيات GPS حقيقية
+      bool hasPermission = await locationService.requestLocationPermission();
+
+      if (!hasPermission) {
+        Navigator.pop(context);
+        widget.onLocationDenied?.call();
+        _showErrorMessage();
+        return;
+      }
+
+      // جلب الموقع الحالي
+      final location = await locationService.getCurrentLocation();
+
+      if (location == null) {
+        Navigator.pop(context);
+        widget.onLocationDenied?.call();
+        _showErrorMessage();
+        return;
+      }
 
       // حفظ الحالة
       await _saveLocationPermissionState(true);
@@ -266,6 +285,7 @@ class _LocationPermissionBaseScreenState
       widget.onLocationGranted?.call();
       _showSuccessMessage();
     } catch (e) {
+      print('Error in location permission: $e');
       Navigator.pop(context);
       widget.onLocationDenied?.call();
       _showErrorMessage();

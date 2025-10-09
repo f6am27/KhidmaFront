@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../constants/colors.dart';
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
+import '../../../services/category_service.dart';
+import '../../../services/location_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class WorkerOpportunitiesScreen extends StatefulWidget {
   final String filterType; // 'category', 'distance', 'price', 'region'
@@ -17,99 +22,39 @@ class WorkerOpportunitiesScreen extends StatefulWidget {
 }
 
 class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
+  // State variables
+  bool _isLoading = true;
+  List<TaskModel> _tasks = [];
+  List<NouakchottArea> _areas = [];
+  String? _errorMessage;
   String selectedSortType = 'none';
   String selectedArea = 'Toutes Zones';
 
-  final List<String> nouakchottAreas = [
-    'Toutes Zones',
-    'Tevragh Zeina',
-    'Riad',
-    'Dar Naim',
-    'Tojounin',
-    'Arafat',
-    'Port',
-    'Carrefour',
-    'Sebkha',
-    'Tarhil',
-  ];
+  List<TaskModel> get filteredOpportunities {
+    List<TaskModel> filtered = List.from(_tasks);
 
-  List<Map<String, dynamic>> allOpportunities = [
-    {
-      'title': 'Nettoyage appartement 3 pièces',
-      'location': 'Tevragh-Zeina',
-      'price': '8500',
-      'time': '3h',
-      'distance': '1.2',
-      'urgent': true,
-      'category': 'nettoyage',
-      'icon': Icons.cleaning_services,
-    },
-    {
-      'title': 'Jardinage et taille',
-      'location': 'Ksar',
-      'price': '6000',
-      'time': '4h',
-      'distance': '2.1',
-      'urgent': false,
-      'category': 'jardinage',
-      'icon': Icons.grass,
-    },
-    {
-      'title': 'Garde d\'enfants soir',
-      'location': 'Sebkha',
-      'price': '7200',
-      'time': '6h',
-      'distance': '3.5',
-      'urgent': false,
-      'category': 'garde',
-      'icon': Icons.child_care,
-    },
-    {
-      'title': 'Réparation plomberie',
-      'location': 'Dar Naim',
-      'price': '12000',
-      'time': '2h',
-      'distance': '0.8',
-      'urgent': true,
-      'category': 'plomberie',
-      'icon': Icons.plumbing,
-    },
-    {
-      'title': 'Installation électrique',
-      'location': 'Arafat',
-      'price': '15000',
-      'time': '5h',
-      'distance': '4.2',
-      'urgent': false,
-      'category': 'electricite',
-      'icon': Icons.electrical_services,
-    },
-  ];
-
-  List<Map<String, dynamic>> get filteredOpportunities {
-    List<Map<String, dynamic>> filtered = List.from(allOpportunities);
-
-    // تطبيق فلترة الفئة إذا كانت محددة
+    // فلترة حسب الفئة
     if (widget.categoryFilter != null) {
       filtered = filtered
-          .where((opp) => opp['category'] == widget.categoryFilter)
+          .where((task) => task.serviceType
+              .toLowerCase()
+              .contains(widget.categoryFilter!.toLowerCase()))
           .toList();
     }
 
-    // تطبيق فلترة المنطقة
+    // فلترة حسب المنطقة
     if (selectedArea != 'Toutes Zones') {
       filtered = filtered
-          .where((opp) => opp['location'].contains(selectedArea.split(' ')[0]))
+          .where((task) => task.location.contains(selectedArea.split(' ')[0]))
           .toList();
     }
 
-    // تطبيق الترتيب
+    // الترتيب
     if (selectedSortType == 'price_asc') {
-      filtered.sort(
-          (a, b) => int.parse(a['price']).compareTo(int.parse(b['price'])));
+      filtered.sort((a, b) => a.budget.compareTo(b.budget));
     } else if (selectedSortType == 'distance_asc') {
-      filtered.sort((a, b) =>
-          double.parse(a['distance']).compareTo(double.parse(b['distance'])));
+      filtered
+          .sort((a, b) => (a.distance ?? 99.0).compareTo(b.distance ?? 99.0));
     }
 
     return filtered;
@@ -118,6 +63,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   @override
   void initState() {
     super.initState();
+
     // تطبيق الفرز الأولي حسب نوع الفلتر
     switch (widget.filterType) {
       case 'distance':
@@ -126,6 +72,66 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       case 'price':
         selectedSortType = 'price_asc';
         break;
+    }
+
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadAreas(),
+      _loadTasks(),
+    ]);
+  }
+
+  Future<void> _loadAreas() async {
+    final result = await categoryService.getNouakchottAreas(simple: true);
+    if (result['ok'] && mounted) {
+      setState(() {
+        _areas = result['areas'] as List<NouakchottArea>;
+      });
+    }
+  }
+
+  Future<void> _loadTasks() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    // بناء الـ parameters
+    String? category = widget.categoryFilter;
+    String? location = selectedArea != 'Toutes Zones' ? selectedArea : null;
+    String? sortBy;
+
+    if (selectedSortType == 'price_asc') {
+      sortBy = 'budget_low';
+    } else if (selectedSortType == 'distance_asc') {
+      sortBy = 'nearest';
+    }
+
+    // ← جلب موقع العامل
+    LatLng? workerLocation = locationService.currentLocation ??
+        await locationService.getLastSavedLocation();
+
+    final result = await taskService.getAvailableTasks(
+      category: category,
+      location: location,
+      sortBy: sortBy,
+      lat: workerLocation?.latitude, // ← جديد
+      lng: workerLocation?.longitude, // ← جديد
+      limit: 10, // ← جديد
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (result['ok']) {
+          _tasks = result['tasks'] as List<TaskModel>;
+        } else {
+          _errorMessage = result['error'];
+        }
+      });
     }
   }
 
@@ -156,6 +162,11 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       ),
       body: Column(
         children: [
+          // ← أضف Banner هنا
+          if (!locationService.isLocationFresh &&
+              locationService.currentLocation != null)
+            _buildLocationWarningBanner(),
+
           // شريط الفلاتر السريعة
           _buildQuickFilters(),
 
@@ -164,14 +175,26 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
 
           // قائمة النتائج
           Expanded(
-            child: filteredOpportunities.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredOpportunities.length,
-                    itemBuilder: (context, index) =>
-                        _buildOpportunityCard(filteredOpportunities[index]),
-                  ),
+            child: _isLoading
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryPurple,
+                    ),
+                  )
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : filteredOpportunities.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            onRefresh: _loadTasks,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: filteredOpportunities.length,
+                              itemBuilder: (context, index) =>
+                                  _buildOpportunityCard(
+                                      filteredOpportunities[index]),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -204,21 +227,27 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             _buildFilterChip(
               'Plus proche',
               selectedSortType == 'distance_asc',
-              () => setState(() {
-                selectedSortType = selectedSortType == 'distance_asc'
-                    ? 'none'
-                    : 'distance_asc';
-              }),
+              () {
+                setState(() {
+                  selectedSortType = selectedSortType == 'distance_asc'
+                      ? 'none'
+                      : 'distance_asc';
+                });
+                _loadTasks();
+              },
               icon: Icons.near_me,
             ),
             const SizedBox(width: 8),
             _buildFilterChip(
               'Prix croissant',
               selectedSortType == 'price_asc',
-              () => setState(() {
-                selectedSortType =
-                    selectedSortType == 'price_asc' ? 'none' : 'price_asc';
-              }),
+              () {
+                setState(() {
+                  selectedSortType =
+                      selectedSortType == 'price_asc' ? 'none' : 'price_asc';
+                });
+                _loadTasks();
+              },
               icon: Icons.attach_money,
             ),
             const SizedBox(width: 8),
@@ -268,32 +297,42 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   }
 
   Widget _buildAreaFilter() {
+    List<String> areaNames = [
+      'Toutes Zones',
+      ..._areas.map((a) => a.name).toList()
+    ];
+
     return PopupMenuButton<String>(
-      onSelected: (value) => setState(() => selectedArea = value),
-      itemBuilder: (context) => nouakchottAreas.map((area) {
-        return PopupMenuItem<String>(
-          value: area,
-          child: Row(
-            children: [
-              if (selectedArea == area) ...[
-                Icon(Icons.check, size: 16, color: AppColors.primaryPurple),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                area,
-                style: TextStyle(
-                  color: selectedArea == area
-                      ? AppColors.primaryPurple
-                      : AppColors.textPrimary,
-                  fontWeight: selectedArea == area
-                      ? FontWeight.w600
-                      : FontWeight.normal,
+      onSelected: (value) {
+        setState(() => selectedArea = value);
+        _loadTasks();
+      },
+      itemBuilder: (context) {
+        return areaNames.map((areaName) {
+          return PopupMenuItem<String>(
+            value: areaName,
+            child: Row(
+              children: [
+                if (selectedArea == areaName) ...[
+                  Icon(Icons.check, size: 16, color: AppColors.primaryPurple),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  areaName,
+                  style: TextStyle(
+                    color: selectedArea == areaName
+                        ? AppColors.primaryPurple
+                        : AppColors.textPrimary,
+                    fontWeight: selectedArea == areaName
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+              ],
+            ),
+          );
+        }).toList();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
@@ -358,10 +397,13 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
           ),
           if (selectedSortType != 'none' || selectedArea != 'Toutes Zones')
             GestureDetector(
-              onTap: () => setState(() {
-                selectedSortType = 'none';
-                selectedArea = 'Toutes Zones';
-              }),
+              onTap: () {
+                setState(() {
+                  selectedSortType = 'none';
+                  selectedArea = 'Toutes Zones';
+                });
+                _loadTasks();
+              },
               child: Text(
                 'Effacer filtres',
                 style: TextStyle(
@@ -376,8 +418,47 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
     );
   }
 
-  Widget _buildOpportunityCard(Map<String, dynamic> opportunity) {
-    final isUrgent = opportunity['urgent'] as bool;
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text(
+              'Erreur de chargement',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Une erreur est survenue',
+              style: TextStyle(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadTasks,
+              icon: Icon(Icons.refresh),
+              label: Text('Réessayer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryPurple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpportunityCard(TaskModel task) {
+    final isUrgent = task.isUrgent;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -408,7 +489,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  opportunity['icon'] as IconData,
+                  _getCategoryIcon(task.serviceType),
                   color: AppColors.primaryPurple,
                   size: 24,
                 ),
@@ -437,7 +518,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      opportunity['title'] as String,
+                      task.title,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -453,13 +534,23 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   color: AppColors.green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  '${opportunity['distance']} km',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.green,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!locationService.isLocationFresh &&
+                        task.distance != null) ...[
+                      Icon(Icons.schedule, size: 12, color: Colors.orange),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      '${task.distance?.toStringAsFixed(1) ?? '?'} km',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.green,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -474,7 +565,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                opportunity['location'] as String,
+                task.location,
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -482,7 +573,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               ),
               const Spacer(),
               Text(
-                '${opportunity['time']} estimées',
+                task.preferredTime,
                 style: TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,
@@ -497,7 +588,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => _showApplicationDialog(opportunity),
+                    onTap: () => _showApplicationDialog(task),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
@@ -531,7 +622,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 ],
               ),
               Text(
-                '${opportunity['price']} MRU',
+                '${task.budget} MRU',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -543,6 +634,49 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String serviceType) {
+    switch (serviceType.toLowerCase()) {
+      case 'nettoyage':
+      case 'nettoyage maison':
+      case 'nettoyage tapis':
+        return Icons.cleaning_services;
+      case 'blanchisserie':
+        return Icons.local_laundry_service;
+      case 'plomberie':
+        return Icons.plumbing;
+      case 'électricité':
+        return Icons.electrical_services;
+      case 'jardinage':
+        return Icons.grass;
+      case 'garde d\'enfants':
+        return Icons.child_care;
+      case 'transport scolaire':
+        return Icons.school_outlined;
+      case 'aide aux devoirs':
+        return Icons.school;
+      case 'peinture':
+        return Icons.format_paint;
+      case 'déménagement':
+        return Icons.local_shipping;
+      case 'réparation':
+      case 'réparation téléphone':
+      case 'réparation ordinateur':
+        return Icons.build;
+      case 'cuisine':
+      case 'cuisine quotidienne':
+      case 'traiteur':
+        return Icons.restaurant;
+      case 'soins animaux':
+        return Icons.pets;
+      case 'climatisation':
+        return Icons.ac_unit;
+      case 'livraison':
+        return Icons.delivery_dining;
+      default:
+        return Icons.work_outline;
+    }
   }
 
   Widget _buildEmptyState() {
@@ -630,6 +764,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
+                  _loadTasks();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryPurple,
@@ -698,10 +833,10 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
     );
   }
 
-  void _showApplicationDialog(Map<String, dynamic> opportunity) {
+  void _showApplicationDialog(TaskModel task) {
     final TextEditingController messageController = TextEditingController();
     final String defaultMessage =
-        "Je suis l'ouvrier Omar Ba Je souhaite postuler pour ce poste.";
+        "Je suis disponible pour cette tâche et j'ai de l'expérience dans ce domaine.";
 
     messageController.text = defaultMessage;
 
@@ -754,7 +889,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  opportunity['title'] as String,
+                  task.title,
                   style:
                       TextStyle(fontSize: 14, color: AppColors.textSecondary),
                 ),
@@ -817,9 +952,8 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                     Expanded(
                       child: GestureDetector(
                         onTap: () {
-                          _submitApplication(
-                              opportunity, messageController.text);
                           Navigator.of(context).pop();
+                          _submitApplication(task, messageController.text);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -850,13 +984,70 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
     );
   }
 
-  void _submitApplication(Map<String, dynamic> opportunity, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Candidature envoyée avec succès!'),
-        backgroundColor: AppColors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  Future<void> _submitApplication(TaskModel task, String message) async {
+    // إظهار loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await taskService.applyToTask(
+      taskId: task.id,
+      message: message,
+    );
+
+    if (mounted) {
+      Navigator.pop(context); // إخفاء loading
+
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Candidature envoyée avec succès!'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        _loadTasks(); // إعادة تحميل
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur lors de la candidature'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildLocationWarningBanner() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Position obsolète. Activez votre position pour des distances précises.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

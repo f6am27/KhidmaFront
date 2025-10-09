@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/colors.dart';
+import '../../../models/models.dart';
+import '../../../services/task_service.dart';
+import '../../../services/location_service.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'worker_opportunities_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
@@ -11,20 +15,23 @@ class WorkerHomeScreen extends StatefulWidget {
 }
 
 class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
-  bool _isLocationEnabled = false; // تغيير القيمة الافتراضية لـ false
+  bool _isLocationEnabled = false;
   String _currentLocation = "Nouakchott";
   String _currentCountry = "Mauritanie";
   bool _isLocationLoading = false;
-  String _workerName = "Omar Ba"; // اسم العامل - يمكن جلبه من قاعدة البيانات
+  String _workerName = "Omar Ba";
+  bool _isLoadingTasks = true;
+  List<TaskModel> _tasks = [];
+  LatLng? _workerLocation;
 
   @override
   void initState() {
     super.initState();
-    // تحميل حالة الموقع المحفوظة
     _loadLocationState();
+    _checkAndStartTracking(); // ← جديد
+    _loadTasks();
   }
 
-  // تحميل حالة الموقع من SharedPreferences
   void _loadLocationState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -36,7 +43,55 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       });
     } catch (e) {
       print('Error loading location state: $e');
-      // في حالة الخطأ، نبقي القيمة الافتراضية false
+    }
+  }
+
+  Future<void> _checkAndStartTracking() async {
+    if (_isLocationEnabled) {
+      // إذا كان Switch مفعّلاً، جلب الموقع وبدء التتبع
+      _workerLocation = await locationService.getCurrentLocation();
+
+      if (_workerLocation != null) {
+        setState(() {
+          _currentLocation = "Position GPS active";
+        });
+
+        await locationService.startPeriodicTracking(
+          interval: Duration(minutes: 5),
+        );
+      }
+    } else {
+      // إذا كان معطلاً، حاول جلب آخر موقع محفوظ
+      final lastLocation = await locationService.getLastSavedLocation();
+      if (lastLocation != null) {
+        setState(() {
+          _workerLocation = lastLocation;
+          _currentLocation = "Dernière position connue";
+        });
+      }
+    }
+  }
+
+  Future<void> _loadTasks() async {
+    setState(() => _isLoadingTasks = true);
+
+    // جلب موقع العامل (حالي أو آخر موقع محفوظ)
+    LatLng? workerLocation = locationService.currentLocation ??
+        await locationService.getLastSavedLocation();
+
+    final result = await taskService.getAvailableTasks(
+      sortBy: 'latest',
+      lat: workerLocation?.latitude, // ← جديد
+      lng: workerLocation?.longitude, // ← جديد
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoadingTasks = false;
+        if (result['ok']) {
+          _tasks = (result['tasks'] as List<TaskModel>).take(4).toList();
+        }
+      });
     }
   }
 
@@ -142,15 +197,29 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _isLocationEnabled
-                                      ? _currentLocation
-                                      : 'Désactivée',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _isLocationEnabled
+                                          ? _currentLocation
+                                          : 'Désactivée',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (_isLocationEnabled &&
+                                        !locationService.isLocationFresh)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Icon(
+                                          Icons.schedule,
+                                          size: 14,
+                                          color: Colors.orange,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 if (_isLocationEnabled)
                                   Text(
@@ -240,7 +309,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  // باقي الدوال بدون تغيير...
   Widget _buildWelcomeCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -431,7 +499,16 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorkerOpportunitiesScreen(
+                      filterType: 'all',
+                    ),
+                  ),
+                ).then((_) => _loadTasks());
+              },
               child: Text(
                 'Voir tout',
                 style: TextStyle(
@@ -443,49 +520,45 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: 3,
-          itemBuilder: (context, index) => _buildOpportunityCard(index),
-        ),
+        _isLoadingTasks
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: AppColors.primaryPurple,
+                  ),
+                ),
+              )
+            : _tasks.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Icon(Icons.work_off,
+                              size: 48, color: AppColors.mediumGray),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Aucune opportunité disponible',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _tasks.length,
+                    itemBuilder: (context, index) =>
+                        _buildOpportunityCard(_tasks[index]),
+                  ),
       ],
     );
   }
 
-  Widget _buildOpportunityCard(int index) {
-    final opportunities = [
-      {
-        'title': 'Nettoyage appartement',
-        'location': 'Tevragh-Zeina',
-        'price': '8500',
-        'time': '3h',
-        'distance': '1.2',
-        'urgent': true,
-        'icon': Icons.cleaning_services,
-      },
-      {
-        'title': 'Jardinage',
-        'location': 'Ksar',
-        'price': '6000',
-        'time': '4h',
-        'distance': '2.1',
-        'urgent': false,
-        'icon': Icons.grass,
-      },
-      {
-        'title': 'Garde d\'enfants',
-        'location': 'Sebkha',
-        'price': '7200',
-        'time': '6h',
-        'distance': '3.5',
-        'urgent': false,
-        'icon': Icons.child_care,
-      },
-    ];
-
-    final opportunity = opportunities[index];
-    final isUrgent = opportunity['urgent'] as bool;
+  Widget _buildOpportunityCard(TaskModel task) {
+    final isUrgent = task.isUrgent;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -516,7 +589,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  opportunity['icon'] as IconData,
+                  _getCategoryIcon(task.serviceType),
                   color: AppColors.primaryPurple,
                   size: 24,
                 ),
@@ -545,7 +618,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      opportunity['title'] as String,
+                      task.title,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -562,7 +635,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '${opportunity['distance'] as String} km',
+                  '${task.distance?.toStringAsFixed(1) ?? '?'} km',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -582,7 +655,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                opportunity['location'] as String,
+                task.location,
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -590,7 +663,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               ),
               const Spacer(),
               Text(
-                '${opportunity['time'] as String} estimées',
+                task.preferredTime,
                 style: TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,
@@ -604,9 +677,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             children: [
               Row(
                 children: [
-                  // زر التقديم مع أيقونة
                   GestureDetector(
-                    onTap: () => _showApplicationDialog(opportunity),
+                    onTap: () => _showApplicationDialog(task),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
@@ -624,7 +696,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // زر المحادثة
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -640,7 +711,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 ],
               ),
               Text(
-                '${opportunity['price'] as String} MRU',
+                '${task.budget} MRU',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -654,12 +725,41 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  void _showApplicationDialog(Map<String, dynamic> opportunity) {
+  IconData _getCategoryIcon(String serviceType) {
+    switch (serviceType.toLowerCase()) {
+      case 'nettoyage':
+      case 'nettoyage maison':
+      case 'nettoyage tapis':
+        return Icons.cleaning_services;
+      case 'plomberie':
+        return Icons.plumbing;
+      case 'jardinage':
+        return Icons.grass;
+      case 'garde d\'enfants':
+        return Icons.child_care;
+      case 'électricité':
+        return Icons.electrical_services;
+      case 'peinture':
+        return Icons.format_paint;
+      case 'déménagement':
+        return Icons.local_shipping;
+      case 'livraison':
+        return Icons.delivery_dining;
+      case 'cuisine':
+      case 'cuisine quotidienne':
+        return Icons.restaurant;
+      case 'climatisation':
+        return Icons.ac_unit;
+      default:
+        return Icons.work_outline;
+    }
+  }
+
+  void _showApplicationDialog(TaskModel task) {
     final TextEditingController messageController = TextEditingController();
     final String defaultMessage =
         "Je suis l'ouvrier $_workerName Je souhaite postuler pour ce poste.";
 
-    // تعيين الرسالة الافتراضية
     messageController.text = defaultMessage;
 
     showDialog(
@@ -685,7 +785,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // عنوان النافذة
                 Row(
                   children: [
                     Container(
@@ -715,15 +814,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  opportunity['title'] as String,
+                  task.title,
                   style: TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // حقل الرسالة
                 Text(
                   'Message optionnel:',
                   style: TextStyle(
@@ -756,11 +853,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // أزرار التحكم
                 Row(
                   children: [
-                    // زر الإلغاء
                     Expanded(
                       child: GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
@@ -784,13 +878,11 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // زر التأكيد
                     Expanded(
                       child: GestureDetector(
                         onTap: () {
-                          _submitApplication(
-                              opportunity, messageController.text);
                           Navigator.of(context).pop();
+                          _submitApplication(task, messageController.text);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -821,87 +913,167 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     );
   }
 
-  void _submitApplication(Map<String, dynamic> opportunity, String message) {
-    // هنا يتم إرسال الطلب مع الرسالة إلى الخادم
-    print('تم التقدم للمهمة: ${opportunity['title']}');
-    print('الرسالة: $message');
-
-    // إظهار رسالة تأكيد
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Candidature envoyée avec succès!'),
-        backgroundColor: AppColors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
+  Future<void> _submitApplication(TaskModel task, String message) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
     );
+
+    final result = await taskService.applyToTask(
+      taskId: task.id,
+      message: message,
+    );
+
+    if (mounted) {
+      Navigator.pop(context);
+
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Candidature envoyée avec succès!'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        _loadTasks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
   }
 
-  // تحديث دالة تبديل الموقع مع حفظ الحالة
   void _toggleLocation(bool value) async {
     setState(() => _isLocationLoading = true);
 
     try {
-      // حفظ الحالة الجديدة
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('worker_location_enabled', value);
+      if (value) {
+        // 1. طلب صلاحيات GPS
+        bool hasPermission = await locationService.requestLocationPermission();
 
-      // محاكاة تحميل (يمكن استبداله بطلب GPS حقيقي)
-      await Future.delayed(const Duration(milliseconds: 800));
+        if (!hasPermission) {
+          setState(() => _isLocationLoading = false);
+          _showErrorSnackBar('Permission refusée');
+          return;
+        }
 
-      setState(() {
-        _isLocationEnabled = value;
-        _isLocationLoading = false;
-      });
+        // 2. جلب الموقع الحالي
+        LatLng? location = await locationService.getCurrentLocation();
 
-      // رسالة تأكيد
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                value ? Icons.location_on : Icons.location_off,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                value ? 'Position activée avec succès!' : 'Position désactivée',
-              ),
-            ],
-          ),
-          backgroundColor: value ? AppColors.green : AppColors.orange,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+        if (location == null) {
+          setState(() => _isLocationLoading = false);
+          _showErrorSnackBar('Impossible d\'obtenir la position');
+          return;
+        }
+
+        // 3. تفعيل المشاركة في Backend
+        final toggleResult = await locationService.toggleLocationSharing(true);
+
+        if (!toggleResult['ok']) {
+          setState(() => _isLocationLoading = false);
+          _showErrorSnackBar('Erreur Backend');
+          return;
+        }
+
+        // 4. بدء التتبع الدوري (كل 5 دقائق)
+        await locationService.startPeriodicTracking(
+          interval: Duration(minutes: 5),
+        );
+
+        // 5. حفظ الحالة محلياً
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('worker_location_enabled', true);
+        setState(() {
+          _isLocationEnabled = true;
+          _workerLocation = location;
+          _currentLocation = "Position GPS active"; // ← تحديث
+          _isLocationLoading = false;
+        });
+
+        _showSuccessSnackBar('Position activée avec succès!');
+
+        // 6. إعادة تحميل المهام بالموقع الجديد
+        _loadTasks();
+      } else {
+        // ═══════════════════════════════════
+        // إلغاء الموقع
+        // ═══════════════════════════════════
+
+        // 1. إيقاف التتبع الدوري
+        locationService.stopPeriodicTracking();
+
+        // 2. إلغاء المشاركة في Backend
+        await locationService.toggleLocationSharing(false);
+
+        // 3. حفظ الحالة محلياً
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('worker_location_enabled', false);
+
+        setState(() {
+          _isLocationEnabled = false;
+          _currentLocation = "Nouakchott"; // ← العودة للافتراضي أو آخر موقع
+          _isLocationLoading = false;
+        });
+
+        _showSuccessSnackBar('Position désactivée');
+      }
     } catch (e) {
-      // في حالة الخطأ
+      print('Error toggling location: $e');
       setState(() => _isLocationLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error, color: Colors.white),
-              const SizedBox(width: 12),
-              Text('Erreur lors de la mise à jour de la position'),
-            ],
-          ),
-          backgroundColor: AppColors.orange,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      _showErrorSnackBar('Erreur');
     }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: AppColors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _showSearchOptions() {
@@ -1062,5 +1234,14 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // إيقاف التتبع عند الخروج من الصفحة
+    if (_isLocationEnabled) {
+      locationService.stopPeriodicTracking();
+    }
+    super.dispose();
   }
 }

@@ -475,7 +475,11 @@ class TaskService {
     String? location,
     int? budgetMin,
     int? budgetMax,
-    String? sortBy, // 'latest', 'budget_high', 'budget_low', 'urgent'
+    String?
+        sortBy, // 'latest', 'budget_high', 'budget_low', 'urgent', 'nearest'
+    double? lat, // ← جديد
+    double? lng, // ← جديد
+    int? limit, // ← جديد
   }) async {
     try {
       String endpoint = '$_baseUrl/tasks/available/';
@@ -487,9 +491,17 @@ class TaskService {
       if (budgetMax != null) queryParams.add('budget_max=$budgetMax');
       if (sortBy != null) queryParams.add('sort_by=$sortBy');
 
+      // ← جديد: إرسال موقع العامل
+      if (lat != null) queryParams.add('lat=$lat');
+      if (lng != null) queryParams.add('lng=$lng');
+      if (limit != null) queryParams.add('limit=$limit');
+
       if (queryParams.isNotEmpty) {
         endpoint += '?${queryParams.join('&')}';
       }
+
+      print('📍 Requesting tasks with location: lat=$lat, lng=$lng');
+      print('🔗 Endpoint: $endpoint');
 
       final response = await AuthManager.authenticatedRequest(
         method: 'GET',
@@ -512,6 +524,11 @@ class TaskService {
             .map((item) => TaskModel.fromJson(item as Map<String, dynamic>))
             .toList();
 
+        print('✅ Received ${tasks.length} tasks');
+        if (tasks.isNotEmpty && tasks[0].distance != null) {
+          print('✅ Distance calculated: ${tasks[0].distance} km');
+        }
+
         return {
           'ok': true,
           'tasks': tasks,
@@ -533,6 +550,7 @@ class TaskService {
         'json': {},
       };
     } catch (e) {
+      print('❌ Error in getAvailableTasks: $e');
       return {
         'ok': false,
         'error': 'Erreur réseau: ${e.toString()}',
