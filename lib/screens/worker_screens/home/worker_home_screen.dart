@@ -14,7 +14,9 @@ class WorkerHomeScreen extends StatefulWidget {
   State<WorkerHomeScreen> createState() => _WorkerHomeScreenState();
 }
 
-class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
+class _WorkerHomeScreenState extends State<WorkerHomeScreen>
+    with WidgetsBindingObserver {
+  // ← تم الإضافة
   bool _isLocationEnabled = false;
   String _currentLocation = "Nouakchott";
   String _currentCountry = "Mauritanie";
@@ -27,8 +29,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ← تم الإضافة
     _loadLocationState();
-    _checkAndStartTracking(); // ← جديد
+    _checkAndStartTracking();
     _loadTasks();
   }
 
@@ -48,8 +51,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
   Future<void> _checkAndStartTracking() async {
     if (_isLocationEnabled) {
-      // إذا كان Switch مفعّلاً، جلب الموقع وبدء التتبع
-      _workerLocation = await locationService.getCurrentLocation();
+      print('🟢 Switch is ON → Starting tracking...');
+      _workerLocation = await locationService.getCurrentLocation(
+        sendToBackend: true,
+      );
 
       if (_workerLocation != null) {
         setState(() {
@@ -59,9 +64,20 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         await locationService.startPeriodicTracking(
           interval: Duration(minutes: 5),
         );
+
+        print('✅ Tracking started successfully');
+      } else {
+        print('⚠️ Could not get location, using last saved');
+        final lastLocation = await locationService.getLastSavedLocation();
+        if (lastLocation != null) {
+          setState(() {
+            _workerLocation = lastLocation;
+            _currentLocation = "Position GPS active";
+          });
+        }
       }
     } else {
-      // إذا كان معطلاً، حاول جلب آخر موقع محفوظ
+      print('🔴 Switch is OFF → Loading last location only');
       final lastLocation = await locationService.getLastSavedLocation();
       if (lastLocation != null) {
         setState(() {
@@ -75,14 +91,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   Future<void> _loadTasks() async {
     setState(() => _isLoadingTasks = true);
 
-    // جلب موقع العامل (حالي أو آخر موقع محفوظ)
     LatLng? workerLocation = locationService.currentLocation ??
         await locationService.getLastSavedLocation();
 
     final result = await taskService.getAvailableTasks(
       sortBy: 'latest',
-      lat: workerLocation?.latitude, // ← جديد
-      lng: workerLocation?.longitude, // ← جديد
+      lat: workerLocation?.latitude,
+      lng: workerLocation?.longitude,
     );
 
     if (mounted) {
@@ -201,7 +216,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                                   children: [
                                     Text(
                                       _isLocationEnabled
-                                          ? _currentLocation
+                                          ? "Position GPS active" // ← نص ثابت دائماً
                                           : 'Désactivée',
                                       style: const TextStyle(
                                         fontSize: 16,
@@ -209,16 +224,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    if (_isLocationEnabled &&
-                                        !locationService.isLocationFresh)
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 4),
-                                        child: Icon(
-                                          Icons.schedule,
-                                          size: 14,
-                                          color: Colors.orange,
-                                        ),
-                                      ),
+                                    // ✅ حذف الأيقونة البرتقالية تماماً
                                   ],
                                 ),
                                 if (_isLocationEnabled)
@@ -914,22 +920,38 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   }
 
   Future<void> _submitApplication(TaskModel task, String message) async {
+    // ✅ احفظ Navigator قبل async
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    // أظهر Loading
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Center(child: CircularProgressIndicator()),
+      builder: (ctx) => Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primaryPurple,
+        ),
+      ),
     );
 
-    final result = await taskService.applyToTask(
-      taskId: task.id,
-      message: message,
-    );
+    try {
+      // ✅ استدعاء API
+      print('📤 Sending application for task: ${task.id}');
 
-    if (mounted) {
-      Navigator.pop(context);
+      final result = await taskService.applyToTask(
+        taskId: task.id,
+        message: message,
+      );
 
+      print('📥 API Response: $result');
+
+      // ✅ أغلق Loading
+      nav.pop();
+
+      // ✅ أظهر النتيجة
       if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Candidature envoyée avec succès!'),
             backgroundColor: AppColors.green,
@@ -939,11 +961,15 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             ),
           ),
         );
-        _loadTasks();
+
+        // إعادة تحميل المهام
+        if (mounted) {
+          _loadTasks();
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
-            content: Text(result['error'] ?? 'Erreur'),
+            content: Text(result['error'] ?? 'Erreur lors de la candidature'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -952,6 +978,15 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           ),
         );
       }
+    } catch (e) {
+      print('❌ Error in _submitApplication: $e');
+      nav.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -960,6 +995,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
     try {
       if (value) {
+        // ═══════════════════════════════════
+        // ✅ تفعيل الموقع
+        // ═══════════════════════════════════
+
         // 1. طلب صلاحيات GPS
         bool hasPermission = await locationService.requestLocationPermission();
 
@@ -969,8 +1008,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           return;
         }
 
-        // 2. جلب الموقع الحالي
-        LatLng? location = await locationService.getCurrentLocation();
+        // 2. جلب الموقع الحالي مع إرسال للـ Backend
+        LatLng? location = await locationService.getCurrentLocation(
+          sendToBackend: true, // ← مهم!
+        );
 
         if (location == null) {
           setState(() => _isLocationLoading = false);
@@ -978,7 +1019,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           return;
         }
 
-        // 3. تفعيل المشاركة في Backend
+        // 3. تفعيل المشاركة في Backend (يُحدّث is_online أيضاً)
         final toggleResult = await locationService.toggleLocationSharing(true);
 
         if (!toggleResult['ok']) {
@@ -995,10 +1036,11 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         // 5. حفظ الحالة محلياً
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('worker_location_enabled', true);
+
         setState(() {
           _isLocationEnabled = true;
           _workerLocation = location;
-          _currentLocation = "Position GPS active"; // ← تحديث
+          _currentLocation = "Position GPS active"; // ← نص ثابت دائماً
           _isLocationLoading = false;
         });
 
@@ -1008,13 +1050,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         _loadTasks();
       } else {
         // ═══════════════════════════════════
-        // إلغاء الموقع
+        // ❌ إلغاء الموقع
         // ═══════════════════════════════════
 
-        // 1. إيقاف التتبع الدوري
+        // 1. إيقاف التتبع الدوري فوراً
         locationService.stopPeriodicTracking();
 
-        // 2. إلغاء المشاركة في Backend
+        // 2. إلغاء المشاركة في Backend (يُحدّث is_online = false)
         await locationService.toggleLocationSharing(false);
 
         // 3. حفظ الحالة محلياً
@@ -1023,14 +1065,14 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
         setState(() {
           _isLocationEnabled = false;
-          _currentLocation = "Nouakchott"; // ← العودة للافتراضي أو آخر موقع
+          _currentLocation = "Désactivée"; // ← نص واضح
           _isLocationLoading = false;
         });
 
         _showSuccessSnackBar('Position désactivée');
       }
     } catch (e) {
-      print('Error toggling location: $e');
+      print('❌ Error toggling location: $e');
       setState(() => _isLocationLoading = false);
       _showErrorSnackBar('Erreur');
     }
@@ -1237,11 +1279,38 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
   }
 
   @override
-  void dispose() {
-    // إيقاف التتبع عند الخروج من الصفحة
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    print('📱 App state: $state');
+
+    if (state == AppLifecycleState.paused) {
+      // ✅ التطبيق في الخلفية - لا شيء (التتبع مستمر)
+      print('⏸️ App paused → Tracking continues');
+    } else if (state == AppLifecycleState.detached) {
+      // ✅ التطبيق سيُغلق
+      print('🔴 App detached → Setting offline');
+      _handleAppClosing();
+    }
+  }
+
+// ✅ دالة مشتركة
+  void _handleAppClosing() {
+    print('🔴 Setting worker offline');
+
     if (_isLocationEnabled) {
       locationService.stopPeriodicTracking();
+      locationService.toggleLocationSharing(false);
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
+    // ✅ استدعاء نفس الدالة
+    _handleAppClosing();
+
     super.dispose();
   }
 }

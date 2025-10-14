@@ -985,43 +985,73 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   }
 
   Future<void> _submitApplication(TaskModel task, String message) async {
-    // إظهار loading
+    // ✅ احفظ Navigator قبل async
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    // أظهر Loading
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Center(child: CircularProgressIndicator()),
+      builder: (ctx) => Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primaryPurple,
+        ),
+      ),
     );
 
-    final result = await taskService.applyToTask(
-      taskId: task.id,
-      message: message,
-    );
+    try {
+      // ✅ استدعاء API
+      print('📤 Sending application for task: ${task.id}');
 
-    if (mounted) {
-      Navigator.pop(context); // إخفاء loading
+      final result = await taskService.applyToTask(
+        taskId: task.id,
+        message: message,
+      );
 
+      print('📥 API Response: $result');
+
+      // ✅ أغلق Loading
+      nav.pop();
+
+      // ✅ أظهر النتيجة
       if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Candidature envoyée avec succès!'),
             backgroundColor: AppColors.green,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
-        _loadTasks(); // إعادة تحميل
+
+        // إعادة تحميل المهام
+        if (mounted) {
+          _loadTasks();
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(result['error'] ?? 'Erreur lors de la candidature'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
+    } catch (e) {
+      print('❌ Error in _submitApplication: $e');
+      nav.pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

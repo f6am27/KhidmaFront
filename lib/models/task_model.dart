@@ -75,8 +75,8 @@ class TaskModel {
   final int? providerRating;
   final bool isUrgent;
   final LatLng? coordinates;
-  final String? timeDescription; // أضف هذا
-  final double? distance; // ← أضف هذا
+  final String? timeDescription;
+  final double? distance;
 
   TaskModel({
     required this.id,
@@ -93,8 +93,8 @@ class TaskModel {
     this.providerRating,
     this.isUrgent = false,
     this.coordinates,
-    this.timeDescription, // أضف هذا
-    this.distance, // ← أضف هذا
+    this.timeDescription,
+    this.distance,
   });
 
   /// Create from Backend JSON response
@@ -139,9 +139,10 @@ class TaskModel {
       isUrgent: json['isUrgent'] ?? json['is_urgent'] ?? false,
       coordinates: coords,
       timeDescription: json['timeDescription'] ?? json['time_description'],
-      distance: json['distance'] != null
-          ? double.tryParse(json['distance'].toString())
-          : null, // ← أضف هذا
+      // ✅ التعديل الوحيد هنا:
+      distance: json['distance_from_worker'] != null
+          ? double.tryParse(json['distance_from_worker'].toString())
+          : null,
     );
   }
 
@@ -182,7 +183,7 @@ class TaskModel {
     int? providerRating,
     bool? isUrgent,
     LatLng? coordinates,
-    double? distance, // ← أضف هذا
+    double? distance,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -199,7 +200,7 @@ class TaskModel {
       providerRating: providerRating ?? this.providerRating,
       isUrgent: isUrgent ?? this.isUrgent,
       coordinates: coordinates ?? this.coordinates,
-      distance: distance ?? this.distance, // ← أضف هذا
+      distance: distance ?? this.distance,
     );
   }
 

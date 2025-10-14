@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../constants/colors.dart';
 import '../../../services/location_service.dart';
@@ -38,6 +39,10 @@ class _LocationPermissionBaseScreenState
   late AnimationController _fadeController;
   late Animation<double> _pulseAnimation;
   late Animation<double> _fadeAnimation;
+
+  // ✅ متغيرات جديدة لتخزين الموقع
+  LatLng? _currentLocation;
+  bool _locationGranted = false;
 
   @override
   void initState() {
@@ -254,41 +259,56 @@ class _LocationPermissionBaseScreenState
     );
   }
 
+  // ════════════════════════════════════════════
+  // ✅ المُصحح: معالجة منفصلة للعميل والعامل
+  // ════════════════════════════════════════════
   void _handlePrimaryAction() async {
     _showLoadingDialog();
 
     try {
-      // طلب صلاحيات GPS حقيقية
+      // 1. طلب صلاحيات GPS حقيقية
       bool hasPermission = await locationService.requestLocationPermission();
 
       if (!hasPermission) {
-        Navigator.pop(context);
+        Navigator.pop(context); // إغلاق loading dialog
         widget.onLocationDenied?.call();
-        _showErrorMessage();
+        _showErrorMessage('Permission refusée');
         return;
       }
 
-      // جلب الموقع الحالي
-      final location = await locationService.getCurrentLocation();
+      // 2. جلب الموقع الحالي
+      // ✅ للعميل: لا ترسل للـ Backend (sendToBackend: false)
+      // ✅ للعامل: أرسل للـ Backend (sendToBackend: true)
+      final bool shouldSendToBackend = (widget.userType == UserType.worker);
+
+      final location = await locationService.getCurrentLocation(
+        sendToBackend: shouldSendToBackend,
+      );
 
       if (location == null) {
         Navigator.pop(context);
         widget.onLocationDenied?.call();
-        _showErrorMessage();
+        _showErrorMessage('Impossible d\'obtenir la position');
         return;
       }
 
-      // حفظ الحالة
+      // 3. حفظ الموقع والحالة
+      setState(() {
+        _currentLocation = location;
+        _locationGranted = true;
+      });
+
       await _saveLocationPermissionState(true);
 
-      Navigator.pop(context);
+      // 4. إغلاق dialog والإعلام
+      Navigator.pop(context); // إغلاق loading dialog
       widget.onLocationGranted?.call();
       _showSuccessMessage();
     } catch (e) {
-      print('Error in location permission: $e');
+      print('❌ Error in location permission: $e');
       Navigator.pop(context);
       widget.onLocationDenied?.call();
-      _showErrorMessage();
+      _showErrorMessage('Erreur: ${e.toString()}');
     }
   }
 
@@ -347,14 +367,14 @@ class _LocationPermissionBaseScreenState
     );
   }
 
-  void _showErrorMessage() {
+  void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(Icons.error, color: Colors.white),
             const SizedBox(width: 12),
-            Text('Erreur lors de l\'activation'),
+            Expanded(child: Text(message)),
           ],
         ),
         backgroundColor: AppColors.orange,

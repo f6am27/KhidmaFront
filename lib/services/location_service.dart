@@ -5,60 +5,44 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../core/config/api_config.dart';
-import '../core/storage/token_storage.dart';
+import 'auth_manager.dart';
+import 'foreground_location_service.dart';
 
 class LocationService {
-  // ════════════════════════════════════════════
-  // Singleton Pattern
-  // ════════════════════════════════════════════
   static final LocationService _instance = LocationService._internal();
   factory LocationService() => _instance;
   LocationService._internal();
 
-  // ════════════════════════════════════════════
-  // State Management
-  // ════════════════════════════════════════════
   LatLng? _currentLocation;
   bool _isTracking = false;
   Timer? _trackingTimer;
   DateTime? _lastUpdateTime;
 
-  // ════════════════════════════════════════════
-  // Getters
-  // ════════════════════════════════════════════
   LatLng? get currentLocation => _currentLocation;
   bool get isTracking => _isTracking;
   DateTime? get lastUpdateTime => _lastUpdateTime;
 
-  /// هل الموقع حديث؟ (أقل من 6 ساعات)
   bool get isLocationFresh {
     if (_lastUpdateTime == null) return false;
     final difference = DateTime.now().difference(_lastUpdateTime!);
     return difference.inHours < 6;
   }
 
-  /// هل الموقع قديم؟ (أكثر من 6 ساعات)
   bool get isLocationStale {
     if (_lastUpdateTime == null) return true;
     final difference = DateTime.now().difference(_lastUpdateTime!);
     return difference.inHours >= 6;
   }
 
-  // ════════════════════════════════════════════
-  // 1. طلب صلاحيات GPS
-  // ════════════════════════════════════════════
   Future<bool> requestLocationPermission() async {
     try {
-      // التحقق من تفعيل خدمات الموقع
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         print('⚠️ Location services are disabled');
         return false;
       }
 
-      // التحقق من الصلاحيات
       LocationPermission permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
@@ -83,11 +67,10 @@ class LocationService {
   }
 
   // ════════════════════════════════════════════
-  // 2. جلب الموقع الحالي (مرة واحدة)
+  // ✅ المُصحح: إضافة parameter للتحكم في الإرسال
   // ════════════════════════════════════════════
-  Future<LatLng?> getCurrentLocation() async {
+  Future<LatLng?> getCurrentLocation({bool sendToBackend = false}) async {
     try {
-      // التحقق من الصلاحيات
       bool hasPermission = await requestLocationPermission();
       if (!hasPermission) {
         print('⚠️ No location permission');
@@ -96,7 +79,6 @@ class LocationService {
 
       print('📍 Getting current location...');
 
-      // جلب الموقع
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: Duration(seconds: 15),
@@ -108,24 +90,24 @@ class LocationService {
       print(
           '✅ Location obtained: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
 
-      // حفظ الموقع محلياً
+      // دائماً احفظ محلياً
       await _saveLastLocation(_currentLocation!);
 
-      // إرسال الموقع للـ Backend
-      await _sendLocationToBackend(_currentLocation!, position.accuracy);
+      // ✅ أرسل للـ Backend فقط إذا طُلب ذلك (للعمال فقط)
+      if (sendToBackend) {
+        print('📤 Sending location to backend (Worker)...');
+        await _sendLocationToBackend(_currentLocation!, position.accuracy);
+      } else {
+        print('⏭️ Skipping backend send (Client - location only for task)');
+      }
 
       return _currentLocation;
     } catch (e) {
       print('❌ Error getting location: $e');
-
-      // في حالة الفشل، جلب آخر موقع محفوظ
       return await getLastSavedLocation();
     }
   }
 
-  // ════════════════════════════════════════════
-  // 3. بدء التتبع الدوري (للعامل فقط)
-  // ════════════════════════════════════════════
   Future<void> startPeriodicTracking({
     Duration interval = const Duration(minutes: 5),
   }) async {
@@ -138,19 +120,18 @@ class LocationService {
     print(
         '🟢 Starting periodic location tracking (every ${interval.inMinutes} min)');
 
-    // جلب أول موقع فوراً
-    await getCurrentLocation();
+    // ✅ جديد: بدء Foreground Service
+    await foregroundLocationService.start();
 
-    // بدء Timer للتحديث الدوري
+    // تحديث أولي
+    await getCurrentLocation(sendToBackend: true);
+
     _trackingTimer = Timer.periodic(interval, (timer) async {
       print('🔄 Periodic location update...');
-      await getCurrentLocation();
+      await getCurrentLocation(sendToBackend: true);
     });
   }
 
-  // ════════════════════════════════════════════
-  // 4. إيقاف التتبع
-  // ════════════════════════════════════════════
   void stopPeriodicTracking() {
     if (!_isTracking) return;
 
@@ -158,12 +139,12 @@ class LocationService {
     _trackingTimer = null;
     _isTracking = false;
 
+    // ✅ جديد: إيقاف Foreground Service
+    foregroundLocationService.stop();
+
     print('🔴 Periodic tracking stopped');
   }
 
-  // ════════════════════════════════════════════
-  // 5. حفظ آخر موقع محلياً (SharedPreferences)
-  // ════════════════════════════════════════════
   Future<void> _saveLastLocation(LatLng location) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -178,9 +159,6 @@ class LocationService {
     }
   }
 
-  // ════════════════════════════════════════════
-  // 6. جلب آخر موقع محفوظ محلياً
-  // ════════════════════════════════════════════
   Future<LatLng?> getLastSavedLocation() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -206,29 +184,16 @@ class LocationService {
     return null;
   }
 
-  // ════════════════════════════════════════════
-  // 7. إرسال الموقع للـ Backend
-  // ════════════════════════════════════════════
   Future<bool> _sendLocationToBackend(LatLng location, double accuracy) async {
     try {
-      final token = await TokenStorage.readAccess();
-      if (token == null) {
-        print('⚠️ No auth token, cannot send location');
-        return false;
-      }
-
-      final url = Uri.parse('${ApiConfig.baseUrl()}/update-location/');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
+      final response = await AuthManager.authenticatedRequest(
+        method: 'POST',
+        endpoint: '${ApiConfig.baseUrl()}/update-location/',
+        body: {
           'latitude': double.parse(location.latitude.toStringAsFixed(6)),
           'longitude': double.parse(location.longitude.toStringAsFixed(6)),
           'accuracy': accuracy,
-        }),
+        },
       );
 
       if (response.statusCode == 200) {
@@ -239,36 +204,24 @@ class LocationService {
         print('Response: ${response.body}');
         return false;
       }
+    } on AuthException catch (e) {
+      print('❌ Auth error sending location: ${e.message}');
+      if (e.needsLogin) {
+        print('⚠️ User needs to login again');
+      }
+      return false;
     } catch (e) {
       print('❌ Error sending location to backend: $e');
       return false;
     }
   }
 
-  // ════════════════════════════════════════════
-  // 8. تفعيل/إلغاء مشاركة الموقع (Backend)
-  // ════════════════════════════════════════════
   Future<Map<String, dynamic>> toggleLocationSharing(bool enabled) async {
     try {
-      final token = await TokenStorage.readAccess();
-      if (token == null) {
-        return {
-          'ok': false,
-          'error': 'No authentication token',
-        };
-      }
-
-      final url = Uri.parse('${ApiConfig.baseUrl()}/toggle-location-sharing/');
-
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'enabled': enabled,
-        }),
+      final response = await AuthManager.authenticatedRequest(
+        method: 'POST',
+        endpoint: '${ApiConfig.baseUrl()}/toggle-location-sharing/',
+        body: {'enabled': enabled},
       );
 
       if (response.statusCode == 200) {
@@ -285,6 +238,13 @@ class LocationService {
           'error': 'Failed to update settings',
         };
       }
+    } on AuthException catch (e) {
+      print('❌ Auth error toggling location: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Please login again' : e.message,
+        'needsLogin': e.needsLogin,
+      };
     } catch (e) {
       print('❌ Error toggling location sharing: $e');
       return {
@@ -294,26 +254,11 @@ class LocationService {
     }
   }
 
-  // ════════════════════════════════════════════
-  // 9. الحصول على معلومات الموقع من Backend
-  // ════════════════════════════════════════════
   Future<Map<String, dynamic>> getLocationInfo() async {
     try {
-      final token = await TokenStorage.readAccess();
-      if (token == null) {
-        return {
-          'ok': false,
-          'error': 'No authentication token',
-        };
-      }
-
-      final url = Uri.parse('${ApiConfig.baseUrl()}/location-info/');
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        endpoint: '${ApiConfig.baseUrl()}/location-info/',
       );
 
       if (response.statusCode == 200) {
@@ -328,6 +273,13 @@ class LocationService {
           'error': 'Failed to get location info',
         };
       }
+    } on AuthException catch (e) {
+      print('❌ Auth error getting location info: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.message,
+        'needsLogin': e.needsLogin,
+      };
     } catch (e) {
       print('❌ Error getting location info: $e');
       return {
@@ -337,15 +289,9 @@ class LocationService {
     }
   }
 
-  // ════════════════════════════════════════════
-  // 10. تنظيف عند الخروج
-  // ════════════════════════════════════════════
   void dispose() {
     stopPeriodicTracking();
   }
 }
 
-// ════════════════════════════════════════════
-// Global Instance
-// ════════════════════════════════════════════
 final locationService = LocationService();

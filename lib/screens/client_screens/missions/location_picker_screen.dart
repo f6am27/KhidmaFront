@@ -48,7 +48,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       // الحصول على الموقع الحالي
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 120),
+        timeLimit: Duration(seconds: 15),
       );
 
       final LatLng currentLocation =
@@ -66,10 +66,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         );
       }
 
-      // الحصول على العنوان
+      // الحصول على العنوان مع timeout
       await _getAddressFromLatLng(currentLocation);
     } catch (e) {
-      print('Error getting location: $e');
+      print('❌ Error getting location: $e');
       // في حالة الفشل، استخدام نواكشوط كموقع افتراضي
       setState(() {
         _selectedLocation = _nouakchottCenter;
@@ -79,7 +79,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
       if (_mapController != null) {
         _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(_nouakchottCenter, 12.0),
+          CameraUpdate.newLatLngZoom(_nouakchottCenter, 13.0),
         );
       }
     }
@@ -89,9 +89,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     try {
       setState(() => _isLoadingAddress = true);
 
+      // ✅ إضافة timeout لتجنب DEADLINE_EXCEEDED
       List<Placemark> placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
+      ).timeout(
+        Duration(seconds: 5),
+        onTimeout: () {
+          print('⚠️ Geocoding timeout, using coordinates only');
+          return [];
+        },
       );
 
       if (placemarks.isNotEmpty) {
@@ -115,11 +122,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               address.isNotEmpty ? address : 'Nouakchott, Mauritanie';
           _isLoadingAddress = false;
         });
+      } else {
+        // ✅ إذا فشل geocoding، استخدم الإحداثيات
+        setState(() {
+          _currentAddress =
+              'Nouakchott (${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)})';
+          _isLoadingAddress = false;
+        });
       }
     } catch (e) {
-      print('Error getting address: $e');
+      print('❌ Error getting address: $e');
       setState(() {
-        _currentAddress = 'Adresse non disponible';
+        _currentAddress =
+            'Nouakchott (${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)})';
         _isLoadingAddress = false;
       });
     }
@@ -205,23 +220,31 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       ),
       body: Stack(
         children: [
-          // Google Map
+          // ════════════════════════════════════════════
+          // ✅ Google Map - الحل النهائي المضمون
+          // ════════════════════════════════════════════
           GoogleMap(
-            onMapCreated: (GoogleMapController controller) {
+            onMapCreated: (GoogleMapController controller) async {
               _mapController = controller;
 
-              // إذا كان لدينا موقع محدد، انتقل إليه
+              // انتظار 500ms
+              await Future.delayed(Duration(milliseconds: 500));
+
+              // الانتقال للموقع
               if (_selectedLocation != null) {
                 controller.animateCamera(
-                  CameraUpdate.newLatLngZoom(_selectedLocation!, 16.0),
+                  CameraUpdate.newLatLngZoom(_selectedLocation!, 15.0),
                 );
               }
             },
+
             initialCameraPosition: CameraPosition(
-              target: _selectedLocation ?? _nouakchottCenter,
-              zoom: _selectedLocation != null ? 16.0 : 12.0,
+              target: _nouakchottCenter,
+              zoom: 13.0, // ← zoom أوسع
             ),
+
             onTap: _onMapTap,
+
             markers: _selectedLocation != null
                 ? {
                     Marker(
@@ -234,16 +257,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         });
                         _getAddressFromLatLng(newPosition);
                       },
-                      icon: BitmapDescriptor.defaultMarkerWithHue(
-                        BitmapDescriptor.hueBlue,
-                      ),
                     ),
                   }
                 : {},
+
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
+
+            // ✅ هذه أهم نقطة!
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: false, // ← false لتسهيل التحكم
           ),
 
           // Loading overlay
@@ -340,6 +367,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             fontSize: 16,
                             color: Colors.black87,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                 ],
               ),
@@ -364,6 +393,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     )
                   : Icon(Icons.my_location, color: Colors.white),
               mini: true,
+              heroTag: 'myLocationBtn',
             ),
           ),
 
@@ -434,20 +464,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
-  // ✨ الدالة المعدلة - هنا الحل! ✨
   void _confirmLocation() {
     if (_selectedLocation != null) {
-      // تقريب الإحداثيات إلى 7 منازل عشرية (يتوافق مع الباك إند)
+      // تقريب الإحداثيات إلى 7 منازل عشرية
       double roundedLatitude =
           double.parse(_selectedLocation!.latitude.toStringAsFixed(7));
       double roundedLongitude =
           double.parse(_selectedLocation!.longitude.toStringAsFixed(7));
 
       print(
-          'Original coordinates: ${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}');
-      print('Rounded coordinates: $roundedLatitude, $roundedLongitude');
+          '✅ Original: ${_selectedLocation!.latitude}, ${_selectedLocation!.longitude}');
+      print('✅ Rounded: $roundedLatitude, $roundedLongitude');
 
-      // إرجاع البيانات مع الإحداثيات المقربة
+      // إرجاع البيانات
       Navigator.pop(context, {
         'coordinates': LatLng(roundedLatitude, roundedLongitude),
         'address': _currentAddress,
