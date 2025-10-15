@@ -587,84 +587,106 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
   void _showApplicationDialog(TaskModel task) {
     final TextEditingController messageController = TextEditingController();
     messageController.text =
-        "Je suis disponible pour cette tâche. J'ai de l'expérience dans ce domaine.";
+        "Je suis disponible pour cette tâche et j'ai de l'expérience dans ce domaine.";
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        bool isLoading = false;
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        return AlertDialog(
-          backgroundColor:
-              isDark ? ThemeColors.darkCardBackground : Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            'Postuler pour cette tâche',
-            style: TextStyle(color: isDark ? Colors.white : Colors.black),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Tâche: ${task.title}',
-                style: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.grey[700]),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: messageController,
-                maxLines: 3,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor:
+                  isDark ? ThemeColors.darkCardBackground : Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                'Postuler pour cette tâche',
                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  labelText: 'Message',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: ThemeColors.primaryColor),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Tâche: ${task.title}',
+                    style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.grey[700]),
                   ),
-                ),
+                  SizedBox(height: 16),
+                  TextField(
+                    controller: messageController,
+                    maxLines: 3,
+                    enabled: !isLoading,
+                    style:
+                        TextStyle(color: isDark ? Colors.white : Colors.black),
+                    decoration: InputDecoration(
+                      labelText: 'Message',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: ThemeColors.primaryColor),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _sendApplication(task, messageController.text);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeColors.primaryColor,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text('Envoyer', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+              actions: [
+                if (isLoading)
+                  Center(
+                      child: CircularProgressIndicator(
+                          color: ThemeColors.primaryColor))
+                else ...[
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text('Annuler'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      _submitApplicationFromMap(
+                        dialogContext,
+                        task,
+                        messageController.text,
+                        (loading) => setState(() => isLoading = loading),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ThemeColors.primaryColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child:
+                        Text('Envoyer', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  Future<void> _sendApplication(TaskModel task, String message) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(child: CircularProgressIndicator()),
-    );
+  Future<void> _submitApplicationFromMap(
+    BuildContext dialogContext,
+    TaskModel task,
+    String message,
+    Function(bool) setDialogState,
+  ) async {
+    setDialogState(true);
 
-    final result = await taskService.applyToTask(
-      taskId: task.id,
-      message: message,
-    );
+    try {
+      final result = await taskService.applyToTask(
+        taskId: task.id,
+        message: message,
+      );
 
-    if (mounted) {
-      Navigator.pop(context);
+      if (!mounted) return;
+      setDialogState(false);
+
+      Navigator.pop(dialogContext);
       _hideTaskCard();
 
       if (result['ok']) {
@@ -686,6 +708,17 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      setDialogState(false);
+      if (mounted) {
+        Navigator.pop(dialogContext);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }

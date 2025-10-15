@@ -565,48 +565,112 @@ class TaskService {
     String? message,
   }) async {
     try {
+      // ✅ تحويل آمن من String إلى int
+
+      final taskIdInt = int.tryParse(taskId);
+
+      if (taskIdInt == null) {
+        return {
+          'ok': false,
+          'error': 'ID de tâche invalide',
+          'json': {},
+        };
+      }
+
       final body = <String, dynamic>{};
+
       if (message != null && message.isNotEmpty) {
         body['application_message'] = message;
       }
 
+      print('🔍 Sending to: $_baseUrl/tasks/$taskIdInt/apply/');
+
+      print('🔍 Body: $body');
+
       final response = await AuthManager.authenticatedRequest(
         method: 'POST',
-        endpoint: '$_baseUrl/tasks/$taskId/apply/',
+        endpoint: '$_baseUrl/tasks/$taskIdInt/apply/',
         body: body,
       );
 
-      final json = _parseResponse(response);
+      print('🔍 Response Status: ${response.statusCode}');
+
+      print('🔍 Response Body: ${response.body}');
+
+      // ✅ معالجة آمنة للـ Response
+
+      dynamic json;
+
+      try {
+        json = _parseResponse(response);
+
+        print('🔍 Parsed JSON: $json');
+      } catch (parseError) {
+        print('❌ Parse Error: $parseError');
+
+        return {
+          'ok': false,
+          'error': 'Erreur de parsing: ${response.body}',
+          'json': {},
+        };
+      }
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return {
           'ok': true,
           'message': 'Candidature envoyée',
-          'json': json,
+          'json': json is Map ? json : {},
         };
       } else {
+        // ✅ معالجة آمنة للـ error من Backend
+
+        String errorMessage = 'Échec de candidature';
+
+        if (json is Map<String, dynamic>) {
+          // Backend يرجع: {"detail": "error message"}
+
+          errorMessage = json['detail']?.toString() ??
+              json['error']?.toString() ??
+              json['message']?.toString() ??
+              'Échec de candidature';
+        } else if (json is List) {
+          // إذا كان Backend يرجع array
+
+          errorMessage =
+              json.isNotEmpty ? json[0].toString() : 'Échec de candidature';
+        } else if (json is String) {
+          errorMessage = json;
+        }
+
+        print('❌ Backend Error: $errorMessage');
+
         return {
           'ok': false,
-          'error': json['detail'] ?? 'Échec de candidature',
-          'json': json,
+          'error': errorMessage,
+          'json': json is Map ? json : {},
         };
       }
     } on AuthException catch (e) {
+      print('❌ Auth Exception: ${e.message}');
+
       return {
         'ok': false,
         'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
         'needsLogin': e.needsLogin,
         'json': {},
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Unexpected Error: $e');
+
+      print('❌ StackTrace: $stackTrace');
+
       return {
         'ok': false,
-        'error': 'Erreur réseau: ${e.toString()}',
+        'error': 'Erreur: ${e.toString()}',
         'json': {},
       };
     }
   }
-
   // ==================== COMMON ENDPOINTS ====================
 
   /// Get task statistics
