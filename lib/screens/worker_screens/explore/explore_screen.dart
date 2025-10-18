@@ -122,12 +122,14 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
   Future<void> _createMarkers() async {
     Set<Marker> markers = {};
 
+    // ✅ دبوس أخضر لموقع العامل
     if (_isLocationEnabled && _workerLocation != null) {
       markers.add(
         Marker(
           markerId: MarkerId('worker_location'),
           position: _workerLocation!,
-          icon: await _createCustomMarker(Colors.green),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
           infoWindow: InfoWindow(
             title: 'Votre position',
             snippet: 'Travailleur',
@@ -136,21 +138,31 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
       );
     }
 
+    // ✅ دبابيس للمهام
     for (TaskModel task in _availableTasks) {
       if (task.coordinates == null) continue;
+
       String distanceText = '';
       if (_isLocationEnabled && _workerLocation != null) {
         double distanceKm = task.distance ?? 0.0;
         distanceText = ' - ${distanceKm.toStringAsFixed(1)} km';
       }
 
-      Color markerColor = task.isUrgent ? Colors.red : Colors.lightBlue;
+      // ✅ تحديد اللون حسب الأولوية
+      BitmapDescriptor markerIcon;
+      if (task.isUrgent) {
+        markerIcon =
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      } else {
+        markerIcon =
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+      }
 
       markers.add(
         Marker(
           markerId: MarkerId(task.id.toString()),
-          position: task.coordinates ?? LatLng(18.0735, -15.9582),
-          icon: await _createCustomMarker(markerColor),
+          position: task.coordinates!,
+          icon: markerIcon,
           infoWindow: InfoWindow(
             title: task.title,
             snippet: '${task.budget} MRU$distanceText',
@@ -165,15 +177,15 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     });
   }
 
-  Future<BitmapDescriptor> _createCustomMarker(Color color) async {
-    if (color == Colors.red) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-    } else if (color == Colors.green) {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-    } else {
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
-    }
-  }
+  // Future<BitmapDescriptor> _createCustomMarker(Color color) async {
+  //   if (color == Colors.red) {
+  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+  //   } else if (color == Colors.green) {
+  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+  //   } else {
+  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+  //   }
+  // }
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -288,15 +300,23 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
           : Stack(
               children: [
                 GoogleMap(
-                  onMapCreated: (GoogleMapController controller) {
+                  onMapCreated: (GoogleMapController controller) async {
                     _mapController = controller;
                     if (isDark) {
                       controller.setMapStyle(_darkMapStyle);
                     }
+
+                    // ✅ انتظار ثم التقريب
+                    await Future.delayed(Duration(milliseconds: 500));
+                    if (_workerLocation != null) {
+                      controller.animateCamera(
+                        CameraUpdate.newLatLngZoom(_workerLocation!, 15.0),
+                      );
+                    }
                   },
                   initialCameraPosition: CameraPosition(
-                    target: _workerLocation ?? _nouakchottCenter,
-                    zoom: _isLocationEnabled ? 14.0 : 12.0,
+                    target: _nouakchottCenter,
+                    zoom: 13.0, // ← zoom أوسع في البداية
                   ),
                   markers: _markers,
                   myLocationEnabled: false,
@@ -304,6 +324,12 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   onTap: (_) => _hideTaskCard(),
+
+                  // ✅ تفعيل التقريب والتبعيد اليدوي
+                  scrollGesturesEnabled: true,
+                  zoomGesturesEnabled: true, // ← مهم جداً!
+                  rotateGesturesEnabled: true, // ← مهم!
+                  tiltGesturesEnabled: false, // ← false لتسهيل التحكم
                 ),
                 Positioned(
                   top: 16,
@@ -675,7 +701,7 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     String message,
     Function(bool) setDialogState,
   ) async {
-    setDialogState(true);
+    setDialogState(true); // أظهر Loading
 
     try {
       final result = await taskService.applyToTask(
@@ -684,11 +710,14 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
       );
 
       if (!mounted) return;
-      setDialogState(false);
 
+      // ✅ أغلق Dialog أولاً
       Navigator.pop(dialogContext);
+
+      // ✅ أغلق Task Card
       _hideTaskCard();
 
+      // ✅ أظهر النتيجة
       if (result['ok']) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -712,7 +741,6 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
         );
       }
     } catch (e) {
-      setDialogState(false);
       if (mounted) {
         Navigator.pop(dialogContext);
         ScaffoldMessenger.of(context).showSnackBar(

@@ -10,6 +10,8 @@ import '../models/client_profile_model.dart';
 
 class ProfileService {
   final String _baseUrl = ApiConfig.baseUrl();
+  // ✅ إضافة متغير جديد للـ API بدون /users
+  final String _apiBase = ApiConfig.baseUrl().replaceAll('/users', '');
 
   /// Complete worker onboarding with full profile data
   Future<Map<String, dynamic>> completeWorkerOnboarding({
@@ -349,25 +351,138 @@ class ProfileService {
   /// Get client profile
   Future<Map<String, dynamic>> getClientProfile() async {
     try {
+      print('📍 Requesting client profile...');
+      print('🔗 Full URL: $_apiBase/clients/profile/');
+
       final response = await AuthManager.authenticatedRequest(
         method: 'GET',
-        endpoint: '${_baseUrl.replaceAll('/users', '')}/clients/profile/',
+        // ✅ التعديل 1 - استخدام _apiBase بدل _baseUrl
+        endpoint: '$_apiBase/clients/profile/',
+      );
+
+      print('✅ Response Status: ${response.statusCode}');
+      print('📄 Response Body: ${response.body}');
+
+      final json = _parseResponse(response);
+
+      print('🔍 Parsed JSON Type: ${json.runtimeType}');
+      print('🔍 Parsed JSON: $json');
+
+      if (response.statusCode == 200) {
+        // ✅ التحقق من البيانات
+        if (json is Map && json.isNotEmpty) {
+          print('✅ Valid JSON received');
+          final clientProfile = ClientProfile.fromJson(json);
+
+          print('✅ ClientProfile created:');
+          print('  - Full Name: ${clientProfile.fullName}');
+          print('  - Tasks Published: ${clientProfile.totalTasksPublished}');
+          print('  - Tasks Completed: ${clientProfile.totalTasksCompleted}');
+
+          return {
+            'ok': true,
+            'clientProfile': clientProfile,
+            'json': json,
+          };
+        } else {
+          print('❌ Empty or invalid JSON');
+          return {
+            'ok': false,
+            'error': 'البيانات المرجعة فارغة',
+            'json': json,
+          };
+        }
+      } else {
+        print('❌ Error response: ${response.statusCode}');
+        final errorMsg =
+            json['detail'] ?? json['error'] ?? 'Failed to load client profile';
+        return {
+          'ok': false,
+          'error': errorMsg,
+          'statusCode': response.statusCode,
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      print('❌ AuthException: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Please login again' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e, stackTrace) {
+      print('❌ Exception: $e');
+      print('❌ StackTrace: $stackTrace');
+      return {
+        'ok': false,
+        'error': 'Network error: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Get client statistics
+  Future<Map<String, dynamic>> getClientStats() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        // ✅ التعديل 2 - استخدام _apiBase بدل _baseUrl
+        endpoint: '$_apiBase/clients/stats/',
       );
 
       final json = _parseResponse(response);
 
       if (response.statusCode == 200) {
-        final clientProfile = ClientProfile.fromJson(json);
-
         return {
           'ok': true,
-          'clientProfile': clientProfile,
+          'stats': json,
           'json': json,
         };
       } else {
         return {
           'ok': false,
-          'error': json['detail'] ?? 'Failed to load client profile',
+          'error': json['detail'] ?? 'Failed to load statistics',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Please login again' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      return {
+        'ok': false,
+        'error': 'Network error: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Get client dashboard data
+  Future<Map<String, dynamic>> getClientDashboard() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        // ✅ التعديل 3 - استخدام _apiBase بدل _baseUrl
+        endpoint: '$_apiBase/clients/dashboard/',
+      );
+
+      final json = _parseResponse(response);
+
+      if (response.statusCode == 200) {
+        return {
+          'ok': true,
+          'dashboard': json,
+          'json': json,
+        };
+      } else {
+        return {
+          'ok': false,
+          'error': json['detail'] ?? 'Failed to load dashboard',
           'json': json,
         };
       }
@@ -416,7 +531,8 @@ class ProfileService {
 
       final response = await AuthManager.authenticatedRequest(
         method: 'PUT',
-        endpoint: '${_baseUrl.replaceAll('/users', '')}/clients/profile/',
+        // ✅ التعديل 4 - استخدام _apiBase بدل replaceAll
+        endpoint: '$_apiBase/clients/profile/',
         body: body,
       );
 

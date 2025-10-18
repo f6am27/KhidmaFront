@@ -1107,7 +1107,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                   MaterialPageRoute(
                     builder: (context) => WorkerOpportunitiesScreen(
                       filterType: 'category',
-                      categoryFilter: 'nettoyage',
+                      categoryFilter: null, // ← فقط غيّر إلى null
                     ),
                   ),
                 );

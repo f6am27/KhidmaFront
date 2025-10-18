@@ -111,8 +111,34 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     _titleController.text = task.title;
     _descriptionController.text = task.description;
     _budgetController.text = task.budget.toString();
-    _selectedLocation = task.location.split(', ').first;
-// نوع الخدمة - البحث المرن
+
+    // ✅ استخراج اسم المنطقة بشكل صحيح
+    String locationText = task.location;
+
+    if (locationText.contains('(')) {
+      _selectedLocation = locationText.split('(')[0].trim();
+    } else if (locationText.contains(',')) {
+      _selectedLocation = locationText.split(',')[0].trim();
+    } else {
+      _selectedLocation = locationText.trim();
+    }
+
+    print('📍 Raw location: ${task.location}');
+    print('📍 Extracted location: $_selectedLocation');
+
+    // ✅ أضف هذا الكود الجديد هنا
+    if (!_areas.any((area) => area.name == _selectedLocation)) {
+      print('⚠️ Location "$_selectedLocation" not found in areas list!');
+      print('⚠️ Available areas: ${_areas.map((a) => a.name).toList()}');
+
+      // استخدم أول منطقة كقيمة افتراضية
+      if (_areas.isNotEmpty) {
+        _selectedLocation = _areas.first.name;
+        print('✅ Using default area: $_selectedLocation');
+      }
+    }
+
+    // ✅ نوع الخدمة - البحث المرن
     if (_categories.any((cat) => cat.name == task.serviceType)) {
       _selectedServiceType = task.serviceType;
       print('✅ Service type exact match: $_selectedServiceType');

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../constants/colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
+import 'task_details_screen.dart';
 
 class WorkerTasksScreen extends StatefulWidget {
   @override
@@ -43,15 +44,21 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   }
 
   List<TaskModel> get _acceptedTasks {
+    // ✅ التعديل: المهام التي status = active و workStartedAt = null
     return _allTasks
         .where((task) =>
-            task.status == TaskStatus.published ||
-            (task.status == TaskStatus.active && task.assignedProvider != null))
+            task.status == TaskStatus.active &&
+            task.assignedProvider != null &&
+            task.workStartedAt == null)
         .toList();
   }
 
   List<TaskModel> get _inProgressTasks {
-    return _allTasks.where((task) => task.status == TaskStatus.active).toList();
+    // ✅ التعديل: المهام التي status = active و workStartedAt ليس null
+    return _allTasks
+        .where((task) =>
+            task.status == TaskStatus.active && task.workStartedAt != null)
+        .toList();
   }
 
   List<TaskModel> get _completedTasks {
@@ -569,17 +576,19 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   void _startTask(TaskModel task) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false, // ← مهم!
+      builder: (dialogContext) => AlertDialog(
         title: Text('Commencer la tâche'),
         content: Text('Êtes-vous prêt à commencer cette tâche ?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Pas encore')),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Pas encore'),
+          ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              _performStartTask(task);
+              Navigator.of(dialogContext).pop(); // أغلق Dialog التأكيد
+              _performStartTask(task); // ابدأ المهمة
             },
             child: Text('Commencer',
                 style: TextStyle(color: AppColors.primaryPurple)),
@@ -590,29 +599,61 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   }
 
   Future<void> _performStartTask(TaskModel task) async {
-    showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(child: CircularProgressIndicator()));
-
-    final result =
-        await taskService.updateTaskStatus(taskId: task.id, status: 'active');
+    // احفظ الـ Overlay للـ Loading
+    OverlayEntry? loadingOverlay;
 
     if (mounted) {
-      Navigator.pop(context);
+      loadingOverlay = OverlayEntry(
+        builder: (context) => Container(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppColors.primaryPurple),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(loadingOverlay);
+    }
+
+    try {
+      final result = await taskService.updateTaskStatus(
+        taskId: task.id,
+        status: 'start_work',
+      );
+
+      // أزل Loading
+      loadingOverlay?.remove();
+
+      if (!mounted) return;
+
       if (result['ok']) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Tâche commencée avec succès'),
-              backgroundColor: AppColors.green),
+            content: Text('Tâche commencée avec succès'),
+            backgroundColor: AppColors.green,
+          ),
         );
-        _loadTasks();
-        _tabController.animateTo(1);
+        await _loadTasks();
+        if (mounted) {
+          _tabController.animateTo(1);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(result['error'] ?? 'Erreur'),
-              backgroundColor: Colors.red),
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      loadingOverlay?.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -668,16 +709,18 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   void _completeTask(TaskModel task) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
         title: Text('Marquer comme terminée'),
         content: Text('Avez-vous terminé cette tâche ?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Pas encore')),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Pas encore'),
+          ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(dialogContext).pop();
               _performCompleteTask(task);
             },
             child: Text('Terminée', style: TextStyle(color: AppColors.green)),
@@ -688,29 +731,59 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   }
 
   Future<void> _performCompleteTask(TaskModel task) async {
-    showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(child: CircularProgressIndicator()));
-
-    final result = await taskService.updateTaskStatus(
-        taskId: task.id, status: 'work_completed');
+    OverlayEntry? loadingOverlay;
 
     if (mounted) {
-      Navigator.pop(context);
+      loadingOverlay = OverlayEntry(
+        builder: (context) => Container(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppColors.primaryPurple),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(loadingOverlay);
+    }
+
+    try {
+      final result = await taskService.updateTaskStatus(
+        taskId: task.id,
+        status: 'work_completed',
+      );
+
+      loadingOverlay?.remove();
+
+      if (!mounted) return;
+
       if (result['ok']) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Tâche marquée comme terminée'),
-              backgroundColor: AppColors.green),
+            content: Text('Tâche marquée comme terminée'),
+            backgroundColor: AppColors.green,
+          ),
         );
-        _loadTasks();
-        _tabController.animateTo(2);
+        await _loadTasks();
+        if (mounted) {
+          _tabController.animateTo(2);
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(result['error'] ?? 'Erreur'),
-              backgroundColor: Colors.red),
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      loadingOverlay?.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -726,10 +799,13 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   }
 
   void _viewTaskDetails(TaskModel task) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Affichage des détails de "${task.title}"'),
-        backgroundColor: AppColors.primaryPurple,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TaskDetailsScreen(
+          task: task,
+          userRole: 'worker',
+        ),
       ),
     );
   }

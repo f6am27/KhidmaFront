@@ -77,6 +77,8 @@ class TaskModel {
   final LatLng? coordinates;
   final String? timeDescription;
   final double? distance;
+  final DateTime? workStartedAt;
+  final double? finalPrice;
 
   TaskModel({
     required this.id,
@@ -95,6 +97,8 @@ class TaskModel {
     this.coordinates,
     this.timeDescription,
     this.distance,
+    this.workStartedAt,
+    this.finalPrice,
   });
 
   /// Create from Backend JSON response
@@ -142,6 +146,12 @@ class TaskModel {
       // ✅ التعديل الوحيد هنا:
       distance: json['distance_from_worker'] != null
           ? double.tryParse(json['distance_from_worker'].toString())
+          : null,
+      workStartedAt: json['workStartedAt'] != null
+          ? _parseDateTime(json['workStartedAt'])
+          : null,
+      finalPrice: json['final_price'] != null
+          ? double.tryParse(json['final_price'].toString())
           : null,
     );
   }

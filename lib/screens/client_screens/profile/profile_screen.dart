@@ -45,6 +45,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _clientProfile = result['clientProfile'] as ClientProfile;
           _isLoading = false;
         });
+
+        // Debug
+        print('✅ Client Profile Loaded:');
+        print('Published: ${_clientProfile?.totalTasksPublished}');
+        print('Completed: ${_clientProfile?.totalTasksCompleted}');
+        print('Amount Spent: ${_clientProfile?.totalAmountSpent}');
       } else {
         setState(() {
           _errorMessage =

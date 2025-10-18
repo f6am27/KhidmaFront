@@ -5,6 +5,7 @@ import '../../../services/task_service.dart';
 import '../../../services/category_service.dart';
 import '../../../services/location_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../services/profile_service.dart';
 
 class WorkerOpportunitiesScreen extends StatefulWidget {
   final String filterType; // 'category', 'distance', 'price', 'region'
@@ -99,8 +100,21 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       _errorMessage = null;
     });
 
-    // بناء الـ parameters
+    // ✅ جلب فئة العامل إذا كان الفلتر حسب الفئة
     String? category = widget.categoryFilter;
+    if (category == null && widget.filterType == 'category') {
+      try {
+        final result = await profileService.getWorkerProfile();
+        if (result['ok']) {
+          final workerProfile = result['workerProfile'] as WorkerProfile;
+          category = workerProfile.serviceCategory;
+          print('✅ Worker category loaded: $category');
+        }
+      } catch (e) {
+        print('❌ Error loading worker category: $e');
+      }
+    }
+
     String? location = selectedArea != 'Toutes Zones' ? selectedArea : null;
     String? sortBy;
 

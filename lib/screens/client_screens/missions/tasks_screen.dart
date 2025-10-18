@@ -4,6 +4,7 @@ import '../../../models/models.dart';
 import '../../../services/task_service.dart';
 import 'task_candidates.dart';
 import 'create_task.dart';
+import '../../worker_screens/mission/task_details_screen.dart';
 
 class TasksScreen extends StatefulWidget {
   @override
@@ -32,27 +33,20 @@ class _TasksScreenState extends State<TasksScreen>
 
     final result = await taskService.getMyTasks();
 
-    // ════════ ADD THIS DEBUG CODE ════════
-    print('════════ LOAD TASKS DEBUG ════════');
+    print('════════ TASKS DEBUG ════════');
     print('Result OK: ${result['ok']}');
-    print('Result keys: ${result.keys.toList()}');
+    print(
+        'Total tasks: ${result['tasks'] != null ? (result['tasks'] as List).length : 0}');
 
     if (result['tasks'] != null) {
-      print('Tasks type: ${result['tasks'].runtimeType}');
-      print('Tasks length: ${(result['tasks'] as List).length}');
-
-      if ((result['tasks'] as List).isNotEmpty) {
-        print('First task type: ${(result['tasks'] as List)[0].runtimeType}');
-        print('First task: ${(result['tasks'] as List)[0]}');
+      for (var task in result['tasks'] as List<TaskModel>) {
+        print('─────────────────────────');
+        print('Task: ${task.title}');
+        print('Status: ${task.status}');
+        print('Assigned: ${task.assignedProvider}');
       }
     }
-
-    if (result['json'] != null) {
-      print('Raw JSON type: ${result['json'].runtimeType}');
-      print('Raw JSON: ${result['json']}');
-    }
-    print('═══════════════════════════════════');
-    // ════════════════════════════════════
+    print('═══════════════════════════');
 
     if (mounted) {
       setState(() {
@@ -408,66 +402,84 @@ class _TasksScreenState extends State<TasksScreen>
       return Row(
         children: [
           Expanded(
-              child: OutlinedButton(
-                  onPressed: () => _editTask(task),
-                  child: Text('Modifier',
-                      style: TextStyle(color: ThemeColors.primaryColor)),
-                  style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: ThemeColors.primaryColor),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))))),
+            child: OutlinedButton(
+              onPressed: () => _editTask(task),
+              child: Text('Modifier',
+                  style: TextStyle(color: ThemeColors.primaryColor)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: ThemeColors.primaryColor),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
           SizedBox(width: 12),
           Expanded(
-              child: ElevatedButton(
-                  onPressed: () => _cancelTask(task),
-                  child: Text('Annuler'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))))),
+            child: ElevatedButton(
+              onPressed: () => _cancelTask(task),
+              child: Text('Annuler'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
         ],
       );
     } else if (type == 'active' && isWorkCompleted) {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-            onPressed: () => _confirmCompletion(task),
-            icon: Icon(Icons.check_circle, size: 18),
-            label: Text('Confirmer et payer'),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)))),
+          onPressed: () => _confirmCompletion(task),
+          icon: Icon(Icons.check_circle, size: 18),
+          label: Text('Confirmer et payer'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            padding: EdgeInsets.symmetric(vertical: 14),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
       );
     } else if (type == 'completed') {
       return Row(
         children: [
           Expanded(
-              child: OutlinedButton(
-                  onPressed: () => _rateService(task),
-                  child: Text('Évaluer',
-                      style: TextStyle(color: ThemeColors.primaryColor)),
-                  style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: ThemeColors.primaryColor),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))))),
+            child: OutlinedButton.icon(
+              onPressed: () => _viewTaskDetails(task),
+              icon: Icon(Icons.visibility_outlined, size: 16),
+              label: Text('Voir détails'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: ThemeColors.primaryColor,
+                side: BorderSide(color: ThemeColors.primaryColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
           SizedBox(width: 12),
           Expanded(
-              child: ElevatedButton(
-                  onPressed: () => _reorderService(task),
-                  child: Text('Recommander'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))))),
+            child: ElevatedButton.icon(
+              onPressed: () => _rateWorker(task),
+              icon: Icon(Icons.star_outline, size: 16),
+              label: Text('Évaluer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
         ],
       );
     }
-    return SizedBox.shrink();
+    return SizedBox.shrink(); // ← مهم!
   }
 
   Widget _buildEmptyState(String type) {
@@ -646,6 +658,63 @@ class _TasksScreenState extends State<TasksScreen>
     if (result == true) _loadTasks();
   }
 
+  Future<void> _submitReview(TaskModel task, int rating, String comment) async {
+    OverlayEntry? loadingOverlay;
+
+    if (mounted) {
+      loadingOverlay = OverlayEntry(
+        builder: (context) => Container(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(loadingOverlay);
+    }
+
+    try {
+      final result = await taskService.submitTaskReview(
+        taskId: task.id,
+        rating: rating,
+        reviewText: comment.isEmpty ? null : comment,
+      );
+
+      loadingOverlay?.remove();
+
+      if (!mounted) return;
+
+      if (result['ok']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Évaluation envoyée avec succès'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadTasks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      loadingOverlay?.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _cancelTask(TaskModel task) {
     showDialog(
       context: context,
@@ -687,47 +756,520 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  void _confirmCompletion(TaskModel task) async {
-    final confirm = await showDialog<bool>(
+  void _confirmCompletion(TaskModel task) {
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirmer la completion'),
-        content: Text(
-            'Le travail a-t-il été effectué correctement ? Le paiement sera traité après confirmation.'),
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.payment, color: ThemeColors.primaryColor),
+            SizedBox(width: 8),
+            Text('Choisir le mode de paiement'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Le travail a été terminé par le prestataire. Veuillez confirmer et choisir votre mode de paiement.',
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 20),
+            // Option Cash
+            InkWell(
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _confirmCashPayment(task);
+              },
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.green, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.green.withOpacity(0.1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.money, color: Colors.green, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paiement en Cash',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Payer directement au prestataire',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.green),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 12),
+            // Option Bankily
+            InkWell(
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _showBankilyUnavailable();
+              },
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.withOpacity(0.05),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet,
+                        color: Colors.grey, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paiement Bankily',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Bientôt disponible',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.lock_outline, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('Pas encore')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              child: Text('Confirmer', style: TextStyle(color: Colors.white))),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Annuler'),
+          ),
         ],
       ),
     );
-    if (confirm == true) _performConfirmCompletion(task);
   }
 
-  Future<void> _performConfirmCompletion(TaskModel task) async {
+  void _confirmCashPayment(TaskModel task) {
+    final priceController = TextEditingController(text: task.budget.toString());
+
     showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(child: CircularProgressIndicator()));
-    final result = await taskService.confirmTaskCompletion(taskId: task.id);
+      context: context,
+      barrierDismissible: false, // منع الإغلاق بالنقر خارج الـ dialog
+      builder: (dialogContext) => AlertDialog(
+        title: Text('تأكيد الدفع'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.money, color: Colors.green, size: 48),
+            SizedBox(height: 16),
+            Text(
+              'هل قمت بدفع النقود نقداً للعامل؟',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'المبلغ المدفوع (MRU)',
+                hintText: 'أدخل المبلغ النهائي',
+                prefixIcon: Icon(Icons.attach_money, color: Colors.green),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.green, width: 2),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'الميزانية الأولية: ${task.budget} MRU',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              priceController.dispose(); // ✅ احذف عند الإلغاء
+              Navigator.pop(dialogContext);
+            },
+            child: Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // ✅ اقرأ القيمة قبل أي شيء آخر
+              final priceText = priceController.text.trim();
+              final finalPrice = double.tryParse(priceText);
+
+              // ✅ احذف الـ controller فوراً
+              priceController.dispose();
+
+              // ✅ أغلق الـ dialog
+              Navigator.pop(dialogContext);
+
+              // ✅ ثم تحقق وأرسل
+              if (finalPrice == null || finalPrice <= 0) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('المبلغ غير صحيح'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              // ✅ الآن نفذ العملية مع المبلغ الصحيح
+              await _performConfirmCompletion(task, finalPrice);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+            ),
+            child: Text('تأكيد', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    ).then((_) {
+      // ✅ إذا تم إغلاق الـ dialog بأي طريقة أخرى
+      try {
+        priceController.dispose();
+      } catch (e) {
+        print('Controller already disposed: $e');
+      }
+    });
+  }
+
+  void _showBankilyUnavailable() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Service indisponible'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.construction, color: Colors.orange, size: 64),
+            SizedBox(height: 16),
+            Text(
+              'Le paiement via Bankily n\'est pas encore disponible.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Veuillez utiliser le paiement en cash pour le moment.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ThemeColors.primaryColor,
+            ),
+            child: Text('Compris', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performConfirmCompletion(
+      TaskModel task, double finalPrice) async {
+    print('════════ DEBUG PAYMENT ════════');
+    print('Task ID: ${task.id}');
+    print('Final Price: $finalPrice');
+    print('Initial Budget: ${task.budget}');
+    print('════════════════════════════');
+
+    OverlayEntry? loadingOverlay;
+
     if (mounted) {
-      Navigator.pop(context);
+      loadingOverlay = OverlayEntry(
+        builder: (context) => Container(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(loadingOverlay);
+    }
+
+    try {
+      // ✅ تأكد أن finalPrice صحيح قبل الإرسال
+      if (finalPrice <= 0) {
+        throw Exception('المبلغ يجب أن يكون أكبر من صفر');
+      }
+
+      final result = await taskService.confirmTaskCompletion(
+        taskId: task.id,
+        finalPrice: finalPrice, // ✅ أرسل المبلغ الصحيح
+      );
+
+      loadingOverlay?.remove();
+
+      if (!mounted) return;
+
       if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Tâche confirmée terminée. Le paiement sera traité.'),
-            backgroundColor: Colors.green));
-        _loadTasks();
-        _tabController.animateTo(2);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم تأكيد المهمة. المبلغ: $finalPrice MRU'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        await _loadTasks();
+        if (mounted) {
+          _tabController.animateTo(2);
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result['error'] ?? 'Erreur'),
-            backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'خطأ في التأكيد'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      loadingOverlay?.remove();
+      print('❌ Error in payment confirmation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     }
+  }
+
+  void _viewTaskDetails(TaskModel task) async {
+    print('════════ LOADING TASK DETAILS ════════');
+    print('Task ID: ${task.id}');
+    print('Current final_price in memory: ${task.finalPrice}');
+    print('═════════════════════════════════════');
+
+    OverlayEntry? loadingOverlay;
+
+    if (mounted) {
+      loadingOverlay = OverlayEntry(
+        builder: (context) => Container(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(loadingOverlay);
+    }
+
+    try {
+      // ✅ احصل على التفاصيل المحدثة من الـ Backend
+      final result = await taskService.getTaskDetails(task.id.toString());
+
+      loadingOverlay?.remove();
+
+      if (!mounted) return;
+
+      if (result['ok']) {
+        final updatedTask = result['task'] as TaskModel;
+
+        print('════════ TASK DETAILS LOADED ════════');
+        print('Task ID: ${updatedTask.id}');
+        print('Final Price from Backend: ${updatedTask.finalPrice}');
+        print('Budget: ${updatedTask.budget}');
+        print('Status: ${updatedTask.status}');
+        print('═════════════════════════════════════');
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TaskDetailsScreen(
+              task: updatedTask, // ← البيانات المحدثة من الـ Backend
+              userRole: 'client',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'خطأ في تحميل التفاصيل'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      loadingOverlay?.remove();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _rateWorker(TaskModel task) {
+    int selectedRating = 5;
+    String comment = '';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.star, color: Colors.amber),
+              SizedBox(width: 8),
+              Text('Évaluer le prestataire'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (task.assignedProvider != null) ...[
+                  Text(
+                    task.assignedProvider!,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                ],
+                Text(
+                  'Votre note:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      icon: Icon(
+                        index < selectedRating ? Icons.star : Icons.star_border,
+                        size: 40,
+                        color: Colors.amber,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          selectedRating = index + 1;
+                        });
+                      },
+                    );
+                  }),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Commentaire (optionnel):',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  onChanged: (value) => comment = value,
+                  maxLines: 4,
+                  maxLength: 500,
+                  decoration: InputDecoration(
+                    hintText: 'Partagez votre expérience...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: ThemeColors.primaryColor,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _submitReview(task, selectedRating, comment.trim());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ThemeColors.primaryColor,
+              ),
+              child: Text('Envoyer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _rateService(TaskModel task) {

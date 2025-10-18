@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../models/favorite_worker_model.dart';
+import '../../../services/favorite_workers_service.dart';
+import '../../../services/category_service.dart';
+import '../../../models/service_category_model.dart';
 
 class FavoritesScreen extends StatefulWidget {
   @override
@@ -8,25 +12,63 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<ProviderModel> filteredProviders = [];
-  String selectedCategory = 'Tous';
+  final FavoriteWorkersService _service = FavoriteWorkersService();
+  final CategoryService _categoryService = CategoryService();
 
-  final List<String> categories = [
-    'Tous',
-    'Nettoyage',
-    'Plomberie',
-    'Électricité',
-    'Jardinage',
-    'Peinture',
-    'Déménagement',
-    'Réparation',
-    'Cuisine',
-  ];
+  List<FavoriteWorker> filteredWorkers = [];
+  List<FavoriteWorker> allWorkers = [];
+  List<ServiceCategory> allCategories = []; // ✅ جديد
+  String selectedCategory = 'Tous';
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // بدل الفئات الثابتة، استخدم dynamic categories:
+  late List<String> categories; // ✅ عدّل
 
   @override
   void initState() {
     super.initState();
-    filteredProviders = _sampleProviders;
+    categories = ['Tous']; // بداية مع Tous فقط
+    _loadData(); // جديد
+  }
+
+  // ✅ دالة جديدة لجلب البيانات
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // جلب الفئات
+      final categoriesResult = await _categoryService.getServiceCategories();
+
+      // جلب العمال المفضلين
+      final workersResult = await _service.getFavoriteWorkers();
+
+      if (categoriesResult['ok'] && workersResult['ok']) {
+        setState(() {
+          allCategories =
+              categoriesResult['categories'] as List<ServiceCategory>;
+          // بناء قائمة الفئات من الـ Backend
+          categories = ['Tous'] + allCategories.map((cat) => cat.name).toList();
+
+          allWorkers = workersResult['workers'] as List<FavoriteWorker>;
+          filteredWorkers = allWorkers;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = workersResult['error'] ?? categoriesResult['error'];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -35,29 +77,58 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     super.dispose();
   }
 
-  void _filterProviders(String query) {
+  Future<void> _loadFavoriteWorkers() async {
     setState(() {
-      var filtered = _sampleProviders;
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await _service.getFavoriteWorkers();
+
+      if (result['ok']) {
+        setState(() {
+          allWorkers = result['workers'] as List<FavoriteWorker>;
+          filteredWorkers = allWorkers;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = result['error'];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _filterWorkers(String query) {
+    setState(() {
+      var filtered = allWorkers;
 
       // Filter by category
       if (selectedCategory != 'Tous') {
         filtered = filtered
-            .where((provider) =>
-                provider.services.any((service) => service == selectedCategory))
+            .where((worker) =>
+                worker.services.any((service) => service == selectedCategory))
             .toList();
       }
 
       // Filter by search query
       if (query.isNotEmpty) {
         filtered = filtered
-            .where((provider) =>
-                provider.name.toLowerCase().contains(query.toLowerCase()) ||
-                provider.services.any((service) =>
+            .where((worker) =>
+                worker.name.toLowerCase().contains(query.toLowerCase()) ||
+                worker.services.any((service) =>
                     service.toLowerCase().contains(query.toLowerCase())))
             .toList();
       }
 
-      filteredProviders = filtered;
+      filteredWorkers = filtered;
     });
   }
 
@@ -81,30 +152,56 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search bar
-          _buildSearchBar(isDark),
-
-          // Category filter
-          _buildCategoryFilter(isDark),
-
-          // Providers list
-          Expanded(
-            child: filteredProviders.isEmpty
-                ? _buildEmptyState(isDark)
-                : ListView.separated(
-                    padding: EdgeInsets.all(16),
-                    itemCount: filteredProviders.length,
-                    separatorBuilder: (context, index) => SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final provider = filteredProviders[index];
-                      return _buildProviderCard(provider, isDark);
-                    },
+      body: _isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                color: ThemeColors.primaryColor,
+              ),
+            )
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      SizedBox(height: 16),
+                      Text(_errorMessage!),
+                      SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadFavoriteWorkers,
+                        child: Text('Réessayer'),
+                      ),
+                    ],
                   ),
-          ),
-        ],
-      ),
+                )
+              : Column(
+                  children: [
+                    // Search bar
+                    _buildSearchBar(isDark),
+
+                    // Category filter
+                    _buildCategoryFilter(isDark),
+
+                    // Workers list
+                    Expanded(
+                      child: filteredWorkers.isEmpty
+                          ? _buildEmptyState(isDark)
+                          : RefreshIndicator(
+                              onRefresh: _loadFavoriteWorkers,
+                              child: ListView.separated(
+                                padding: EdgeInsets.all(16),
+                                itemCount: filteredWorkers.length,
+                                separatorBuilder: (context, index) =>
+                                    SizedBox(height: 16),
+                                itemBuilder: (context, index) {
+                                  final worker = filteredWorkers[index];
+                                  return _buildWorkerCard(worker, isDark);
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
     );
   }
 
@@ -117,7 +214,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       ),
       child: TextField(
         controller: _searchController,
-        onChanged: _filterProviders,
+        onChanged: _filterWorkers,
         style: Theme.of(context).textTheme.bodyMedium,
         decoration: InputDecoration(
           hintText: 'Rechercher un prestataire...',
@@ -136,7 +233,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   ),
                   onPressed: () {
                     _searchController.clear();
-                    _filterProviders('');
+                    _filterWorkers('');
                   },
                 )
               : null,
@@ -174,7 +271,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               onSelected: (selected) {
                 setState(() {
                   selectedCategory = category;
-                  _filterProviders(_searchController.text);
+                  _filterWorkers(_searchController.text);
                 });
               },
               backgroundColor:
@@ -188,7 +285,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  Widget _buildProviderCard(ProviderModel provider, bool isDark) {
+  Widget _buildWorkerCard(FavoriteWorker worker, bool isDark) {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -214,10 +311,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     radius: 30,
                     backgroundColor:
                         isDark ? ThemeColors.darkSurface : Colors.grey[200],
-                    backgroundImage: provider.profileImage != null
-                        ? NetworkImage(provider.profileImage!)
+                    backgroundImage: worker.profileImage != null
+                        ? NetworkImage(worker.profileImage!)
                         : null,
-                    child: provider.profileImage == null
+                    child: worker.profileImage == null
                         ? Icon(
                             Icons.person,
                             size: 35,
@@ -225,7 +322,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           )
                         : null,
                   ),
-                  if (provider.isOnline)
+                  if (worker.isOnline)
                     Positioned(
                       bottom: 2,
                       right: 2,
@@ -244,29 +341,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         ),
                       ),
                     ),
-                  // Verified badge
-                  if (provider.isVerified)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.verified,
-                          color: Colors.white,
-                          size: 12,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               SizedBox(width: 16),
 
-              // Provider info
+              // Worker info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -275,7 +354,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            provider.name,
+                            worker.name,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
@@ -286,7 +365,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           ),
                         ),
                         IconButton(
-                          onPressed: () => _removeFromFavorites(provider),
+                          onPressed: () => _removeFromFavorites(worker),
                           icon: Icon(
                             Icons.favorite,
                             color: Colors.red,
@@ -301,9 +380,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         Row(
                           children: List.generate(5, (index) {
                             return Icon(
-                              index < provider.rating.floor()
+                              index < worker.rating.floor()
                                   ? Icons.star
-                                  : (index < provider.rating
+                                  : (index < worker.rating
                                       ? Icons.star_half
                                       : Icons.star_border),
                               size: 16,
@@ -313,7 +392,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         ),
                         SizedBox(width: 6),
                         Text(
-                          '${provider.rating} (${provider.reviewCount})',
+                          '${worker.rating} (${worker.reviewCount})',
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
@@ -322,7 +401,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                     isDark ? Colors.white54 : Colors.grey[600],
                               ),
                         ),
-                        if (provider.isOnline) ...[
+                        if (worker.isOnline) ...[
                           SizedBox(width: 12),
                           Container(
                             padding: EdgeInsets.symmetric(
@@ -354,7 +433,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: provider.services.map((service) {
+            children: worker.services.map((service) {
               return Container(
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -384,7 +463,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ),
               SizedBox(width: 6),
               Text(
-                '${provider.completedJobs} missions',
+                '${worker.completedJobs} missions',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: isDark ? Colors.white70 : Colors.grey[600],
                     ),
@@ -398,10 +477,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  provider.location,
+                  worker.location,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white54 : Colors.grey[500],
                       ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -413,7 +493,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _contactProvider(provider),
+                  onPressed: () => _contactWorker(worker),
                   icon: Icon(
                     Icons.chat,
                     size: 16,
@@ -434,7 +514,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _callProvider(provider),
+                  onPressed: () => _callWorker(worker),
                   icon: Icon(Icons.phone, size: 16),
                   label: Text('Appeler'),
                   style: ElevatedButton.styleFrom(
@@ -483,11 +563,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           ),
           SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () {
-              // Navigate to search or browse providers
-            },
-            icon: Icon(Icons.search),
-            label: Text('Trouver des prestataires'),
+            onPressed: _loadFavoriteWorkers,
+            icon: Icon(Icons.refresh),
+            label: Text('Réessayer'),
             style: ElevatedButton.styleFrom(
               backgroundColor: ThemeColors.primaryColor,
               foregroundColor: Colors.white,
@@ -525,17 +603,27 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   ),
             ),
             SizedBox(height: 16),
-            _buildSortOption('Note la plus élevée', Icons.star, isDark),
-            _buildSortOption('Plus d\'expérience', Icons.work, isDark),
-            _buildSortOption('En ligne maintenant', Icons.circle, isDark),
-            _buildSortOption('Plus proche', Icons.location_on, isDark),
+            // ✅ فقط التقييم والأونلاين
+            _buildSortOption(
+              'Note la plus élevée',
+              Icons.star,
+              'rating_high',
+              isDark,
+            ),
+            _buildSortOption(
+              'En ligne maintenant',
+              Icons.circle,
+              'online',
+              isDark,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSortOption(String title, IconData icon, bool isDark) {
+  Widget _buildSortOption(
+      String title, IconData icon, String sortBy, bool isDark) {
     return ListTile(
       leading: Icon(
         icon,
@@ -549,30 +637,31 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       ),
       onTap: () {
         Navigator.pop(context);
-        _sortProviders(title);
+        _sortWorkers(sortBy);
       },
     );
   }
 
-  void _sortProviders(String sortType) {
+  void _sortWorkers(String sortBy) {
     setState(() {
-      switch (sortType) {
-        case 'Note la plus élevée':
-          filteredProviders.sort((a, b) => b.rating.compareTo(a.rating));
+      switch (sortBy) {
+        case 'rating_high':
+          // ترتيب من الأعلى تقييماً للأقل
+          filteredWorkers.sort((a, b) => b.rating.compareTo(a.rating));
           break;
-        case 'Plus d\'expérience':
-          filteredProviders
-              .sort((a, b) => b.completedJobs.compareTo(a.completedJobs));
-          break;
-        case 'En ligne maintenant':
-          filteredProviders.sort((a, b) => b.isOnline ? 1 : -1);
+        case 'online':
+          // عرض العمال الأونلاين فقط
+          filteredWorkers =
+              filteredWorkers.where((worker) => worker.isOnline).toList();
           break;
       }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Trié par: $sortType'),
+        content: Text(sortBy == 'rating_high'
+            ? 'مرتب حسب التقييم'
+            : 'عرض العمال الأونلاين فقط'),
         backgroundColor: ThemeColors.primaryColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -582,38 +671,28 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  void _removeFromFavorites(ProviderModel provider) {
-    setState(() {
-      _sampleProviders.removeWhere((p) => p.id == provider.id);
-      _filterProviders(_searchController.text);
-    });
+  Future<void> _removeFromFavorites(FavoriteWorker worker) async {
+    final result = await _service.removeFromFavorites(worker.workerId);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${provider.name} retiré des favoris'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    if (result['ok']) {
+      await _loadFavoriteWorkers();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${worker.name} retiré des favoris'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        action: SnackBarAction(
-          label: 'Annuler',
-          textColor: Colors.white,
-          onPressed: () {
-            setState(() {
-              _sampleProviders.add(provider);
-              _filterProviders(_searchController.text);
-            });
-          },
-        ),
-      ),
-    );
+      );
+    }
   }
 
-  void _contactProvider(ProviderModel provider) {
+  void _contactWorker(FavoriteWorker worker) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Ouverture du chat avec ${provider.name}'),
+        content: Text('Ouverture du chat avec ${worker.name}'),
         backgroundColor: ThemeColors.primaryColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -623,10 +702,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  void _callProvider(ProviderModel provider) {
+  void _callWorker(FavoriteWorker worker) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Appel de ${provider.name}'),
+        content: Text('Appel de ${worker.name}'),
         backgroundColor: ThemeColors.successColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -635,83 +714,4 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       ),
     );
   }
-
-  // Sample data
-  static List<ProviderModel> _sampleProviders = [
-    ProviderModel(
-      id: '1',
-      name: 'Fatima Al-Zahra',
-      rating: 4.9,
-      reviewCount: 124,
-      location: 'Tevragh Zeina, Nouakchott',
-      completedJobs: 87,
-      services: ['Nettoyage', 'Cuisine'],
-      isOnline: true,
-      isVerified: true,
-      profileImage: null,
-    ),
-    ProviderModel(
-      id: '2',
-      name: 'Ahmed Hassan',
-      rating: 4.8,
-      reviewCount: 98,
-      location: 'Ksar, Nouakchott',
-      completedJobs: 156,
-      services: ['Plomberie', 'Électricité'],
-      isOnline: false,
-      isVerified: true,
-      profileImage: null,
-    ),
-    ProviderModel(
-      id: '3',
-      name: 'Omar Ba',
-      rating: 4.7,
-      reviewCount: 67,
-      location: 'Sebkha, Nouakchott',
-      completedJobs: 43,
-      services: ['Jardinage', 'Nettoyage'],
-      isOnline: true,
-      isVerified: false,
-      profileImage: null,
-    ),
-    ProviderModel(
-      id: '4',
-      name: 'Aicha Mint Salem',
-      rating: 4.6,
-      reviewCount: 89,
-      location: 'Arafat, Nouakchott',
-      completedJobs: 72,
-      services: ['Peinture', 'Déménagement'],
-      isOnline: false,
-      isVerified: true,
-      profileImage: null,
-    ),
-  ];
-}
-
-// Provider model
-class ProviderModel {
-  final String id;
-  final String name;
-  final double rating;
-  final int reviewCount;
-  final String location;
-  final int completedJobs;
-  final List<String> services;
-  final bool isOnline;
-  final bool isVerified;
-  final String? profileImage;
-
-  ProviderModel({
-    required this.id,
-    required this.name,
-    required this.rating,
-    required this.reviewCount,
-    required this.location,
-    required this.completedJobs,
-    required this.services,
-    required this.isOnline,
-    required this.isVerified,
-    this.profileImage,
-  });
 }

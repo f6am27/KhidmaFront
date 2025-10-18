@@ -3,6 +3,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../../core/theme/theme_colors.dart';
+import 'dart:math';
+import '../../../services/category_service.dart';
+import '../../../models/models.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({Key? key}) : super(key: key);
@@ -89,14 +92,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     try {
       setState(() => _isLoadingAddress = true);
 
-      // ✅ إضافة timeout لتجنب DEADLINE_EXCEEDED
+      // ✅ محاولة Geocoding أولاً
       List<Placemark> placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
       ).timeout(
         Duration(seconds: 5),
         onTimeout: () {
-          print('⚠️ Geocoding timeout, using coordinates only');
+          print('⚠️ Geocoding timeout, using nearest area');
           return [];
         },
       );
@@ -123,21 +126,103 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           _isLoadingAddress = false;
         });
       } else {
-        // ✅ إذا فشل geocoding، استخدم الإحداثيات
+        // ✅ إذا فشل Geocoding، احسب أقرب منطقة
+        await _getNearestArea(location);
+      }
+    } catch (e) {
+      print('❌ Error getting address: $e');
+      // ✅ في حالة الخطأ، احسب أقرب منطقة
+      await _getNearestArea(location);
+    }
+  }
+
+// ✅ دالة جديدة: حساب أقرب منطقة
+  Future<void> _getNearestArea(LatLng location) async {
+    try {
+      // استيراد المناطق من categoryService
+      final result = await categoryService.getNouakchottAreas(simple: true);
+
+      if (result['ok']) {
+        final areas = result['areas'] as List<NouakchottArea>;
+        // ✅ أضف هذا للتحقق
+        print('📍 Total areas loaded: ${areas.length}');
+        for (var area in areas) {
+          print(
+              'Area: ${area.name} - Lat: ${area.latitude}, Lng: ${area.longitude}');
+        }
+
+        if (areas.isEmpty) {
+          setState(() {
+            _currentAddress = 'Nouakchott, Mauritanie';
+            _isLoadingAddress = false;
+          });
+          return;
+        }
+
+        // حساب أقرب منطقة
+        String nearestArea = 'Nouakchott';
+        double minDistance = double.infinity;
+
+        for (var area in areas) {
+          // ✅ استخدم latitude و longitude مباشرة
+          if (area.latitude != null && area.longitude != null) {
+            // حساب المسافة باستخدام صيغة Haversine
+            double distance = _calculateDistance(
+              location.latitude,
+              location.longitude,
+              area.latitude!,
+              area.longitude!,
+            );
+
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearestArea = area.name;
+            }
+          }
+        }
+
         setState(() {
-          _currentAddress =
-              'Nouakchott (${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)})';
+          _currentAddress = '$nearestArea, Nouakchott';
+          _isLoadingAddress = false;
+        });
+
+        print(
+            '✅ Nearest area: $nearestArea (${minDistance.toStringAsFixed(2)} km)');
+      } else {
+        setState(() {
+          _currentAddress = 'Nouakchott, Mauritanie';
           _isLoadingAddress = false;
         });
       }
     } catch (e) {
-      print('❌ Error getting address: $e');
+      print('❌ Error finding nearest area: $e');
       setState(() {
-        _currentAddress =
-            'Nouakchott (${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)})';
+        _currentAddress = 'Nouakchott, Mauritanie';
         _isLoadingAddress = false;
       });
     }
+  }
+
+// ✅ دالة حساب المسافة (Haversine Formula)
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // نصف قطر الأرض بالكيلومتر
+
+    double dLat = _degreesToRadians(lat2 - lat1);
+    double dLon = _degreesToRadians(lon2 - lon1);
+
+    double a = (sin(dLat / 2) * sin(dLat / 2)) +
+        cos(_degreesToRadians(lat1)) *
+            cos(_degreesToRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * pi / 180;
   }
 
   void _onMapTap(LatLng location) {
