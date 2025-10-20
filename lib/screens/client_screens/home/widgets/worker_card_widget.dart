@@ -1,19 +1,147 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/theme_colors.dart';
+import '../../../../models/worker_search_model.dart';
+import '../../../../services/favorite_workers_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class WorkerCardWidget extends StatelessWidget {
-  final Map<String, dynamic> worker;
-  final VoidCallback onFavoriteToggle;
-  final VoidCallback onPhoneCall;
-  final VoidCallback onChat;
+class WorkerCardWidget extends StatefulWidget {
+  final WorkerSearchResult worker; // ✅ تغيير من Map إلى Model
+  final VoidCallback? onPhoneCall;
+  final VoidCallback? onChat;
+  final VoidCallback? onFavoriteChanged; // ✅ callback عند تغيير favorite
 
   const WorkerCardWidget({
     Key? key,
     required this.worker,
-    required this.onFavoriteToggle,
-    required this.onPhoneCall,
-    required this.onChat,
+    this.onPhoneCall,
+    this.onChat,
+    this.onFavoriteChanged,
   }) : super(key: key);
+
+  @override
+  State<WorkerCardWidget> createState() => _WorkerCardWidgetState();
+}
+
+class _WorkerCardWidgetState extends State<WorkerCardWidget> {
+  final FavoriteWorkersService _favoriteService = FavoriteWorkersService();
+  bool _isFavorite = false;
+  bool _isTogglingFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.worker.isFavorite;
+  }
+
+  @override
+  void didUpdateWidget(WorkerCardWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.worker.isFavorite != widget.worker.isFavorite) {
+      _isFavorite = widget.worker.isFavorite;
+    }
+  }
+
+  /// ✅ Toggle favorite مع Backend
+  Future<void> _toggleFavorite() async {
+    if (_isTogglingFavorite) return;
+
+    setState(() {
+      _isTogglingFavorite = true;
+    });
+
+    try {
+      final result = await _favoriteService.toggleFavorite(widget.worker.id);
+
+      if (result['ok']) {
+        setState(() {
+          _isFavorite = result['is_favorite'];
+        });
+
+        // إظهار رسالة نجاح
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _isFavorite
+                    ? '${widget.worker.name} ajouté aux favoris'
+                    : '${widget.worker.name} retiré des favoris',
+              ),
+              backgroundColor:
+                  _isFavorite ? ThemeColors.primaryColor : Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // إشعار الـ parent widget
+        widget.onFavoriteChanged?.call();
+      } else {
+        // في حالة فشل، عرض رسالة خطأ
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['error'] ?? 'Erreur lors de la mise à jour'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error toggling favorite: $e');
+    } finally {
+      setState(() {
+        _isTogglingFavorite = false;
+      });
+    }
+  }
+
+  Future<void> _makePhoneCall() async {
+    // إزالة علامة + من الرقم
+    String cleanPhone = widget.worker.phone.replaceAll('+', '');
+
+    // استخدام tel:// بدلاً من tel: لفتح تطبيق الهاتف مع تعبئة الرقم فقط
+    final phoneNumber = 'tel://$cleanPhone';
+
+    print('📞 Opening dialer with: $cleanPhone');
+
+    try {
+      if (await canLaunch(phoneNumber)) {
+        await launch(phoneNumber);
+        print('✅ Dialer opened successfully');
+      } else {
+        // جرّب النسخة البديلة
+        final fallbackPhone = 'tel:$cleanPhone';
+        if (await canLaunch(fallbackPhone)) {
+          await launch(fallbackPhone);
+          print('✅ Dialer opened with fallback');
+        } else {
+          throw 'Cannot launch dialer';
+        }
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فتح تطبيق الهاتف: $cleanPhone'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,11 +191,36 @@ class WorkerCardWidget extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Icon(
-          Icons.person,
-          size: 30,
-          color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
-        ),
+        child: widget.worker.image != null && widget.worker.image!.isNotEmpty
+            ? Image.network(
+                widget.worker.image!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.person,
+                    size: 30,
+                    color: isDark
+                        ? ThemeColors.darkTextSecondary
+                        : Colors.grey[600],
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                    ),
+                  );
+                },
+              )
+            : Icon(
+                Icons.person,
+                size: 30,
+                color:
+                    isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+              ),
       ),
     );
   }
@@ -82,7 +235,7 @@ class WorkerCardWidget extends StatelessWidget {
         SizedBox(height: 4),
         _buildWorkerArea(isDark),
         SizedBox(height: 4),
-        _buildPriceRow(isDark),
+        _buildCategoryRow(isDark),
       ],
     );
   }
@@ -97,7 +250,7 @@ class WorkerCardWidget extends StatelessWidget {
         ),
         SizedBox(width: 4),
         Text(
-          worker['rating'].toString(),
+          widget.worker.rating.toStringAsFixed(1),
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -112,7 +265,7 @@ class WorkerCardWidget extends StatelessWidget {
 
   Widget _buildWorkerName(bool isDark) {
     return Text(
-      worker['name'],
+      widget.worker.name,
       style: TextStyle(
         fontWeight: FontWeight.bold,
         fontSize: 16,
@@ -124,7 +277,7 @@ class WorkerCardWidget extends StatelessWidget {
 
   Widget _buildWorkerArea(bool isDark) {
     return Text(
-      worker['area'],
+      widget.worker.area,
       style: TextStyle(
         color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
         fontSize: 12,
@@ -132,65 +285,100 @@ class WorkerCardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildPriceRow(bool isDark) {
-    return Text(
-      worker['price'] + '/heure',
-      style: TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 14,
-        color: ThemeColors.successColor,
-      ),
+  Widget _buildCategoryRow(bool isDark) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            widget.worker.category,
+            style: TextStyle(
+              color: ThemeColors.primaryColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildActionButtons(bool isDark) {
-    return Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Heart (Favorite) button
-        GestureDetector(
-          onTap: onFavoriteToggle,
-          child: Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(
-              worker['isFavorite'] ? Icons.favorite : Icons.favorite_border,
-              color: worker['isFavorite']
-                  ? Colors.red
-                  : (isDark ? ThemeColors.darkTextSecondary : Colors.grey[600]),
-              size: 20,
+        // ✅ الأيقونات في صف واحد
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: _isTogglingFavorite ? null : _toggleFavorite,
+              child: Padding(
+                padding: EdgeInsets.all(4),
+                child: _isTogglingFavorite
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                        ),
+                      )
+                    : Icon(
+                        _isFavorite ? Icons.favorite : Icons.favorite_border,
+                        color: _isFavorite
+                            ? Colors.red
+                            : (isDark
+                                ? ThemeColors.darkTextSecondary
+                                : Colors.grey[600]),
+                        size: 20,
+                      ),
+              ),
             ),
-          ),
+            SizedBox(width: 4),
+            GestureDetector(
+              onTap: _makePhoneCall,
+              child: Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(
+                  Icons.phone,
+                  color: ThemeColors.successColor,
+                  size: 20,
+                ),
+              ),
+            ),
+            SizedBox(width: 4),
+            GestureDetector(
+              onTap: widget.onChat,
+              child: Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  color: ThemeColors.primaryColor,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
         ),
 
-        SizedBox(width: 4), // مسافة صغيرة بين الأيقونات
-
-        // Phone button
-        GestureDetector(
-          onTap: onPhoneCall,
-          child: Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(
-              Icons.phone,
-              color: ThemeColors.successColor,
-              size: 20,
+        // ✅ المسافة أسفل الأيقونات مباشرة
+        if (widget.worker.distanceFromClient != null)
+          Padding(
+            padding: const EdgeInsets.only(
+                top: 15.0, right: 2.0), // ← جرّب تغيير هذه القيم
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${widget.worker.distanceFromClient!.toStringAsFixed(1)} km',
+                style: const TextStyle(
+                  color: Colors.green, // اللون الأخضر كما أردت
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ),
-        ),
-
-        SizedBox(width: 4), // مسافة صغيرة بين الأيقونات
-
-        // Chat button
-        GestureDetector(
-          onTap: onChat,
-          child: Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(
-              Icons.chat_bubble_outline,
-              color: ThemeColors.primaryColor,
-              size: 20,
-            ),
-          ),
-        ),
       ],
     );
   }

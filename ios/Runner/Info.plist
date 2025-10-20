@@ -52,5 +52,9 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>هذا التطبيق يحتاج للوصول لموقعك لإظهار الوظائف القريبة منك</string>
 	<!-- <<< END ADD -->
+
+	<!-- ✅ إضافة صلاحية الاتصال -->
+	<key>NSPhoneNumberFormattingDisabled</key>
+	<false/>
 </dict>
 </plist>

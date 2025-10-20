@@ -3,11 +3,18 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'widgets/search_bar_widget.dart';
 import 'widgets/category_selector_widget.dart';
-import 'widgets/filter_options_widget.dart';
 import 'widgets/worker_card_widget.dart';
 import '../../../core/theme/theme_colors.dart';
 import 'widgets/all_services_screen.dart';
 import '../onboarding/client_location_permission_screen.dart';
+import '../../../services/worker_search_service.dart';
+import '../../../services/favorite_workers_service.dart';
+import '../../../models/worker_search_model.dart';
+import '../../../services/category_service.dart';
+import '../../../models/service_category_model.dart';
+import '../../../models/nouakchott_area_model.dart';
+import '../../../services/location_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   static const Color primaryPurple = Color(0xFF6366F1);
@@ -17,15 +24,15 @@ class ClientHomeScreen extends StatefulWidget {
 }
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
-  String selectedFilter = 'Tout';
-  String selectedService = 'Tout';
+  // Services
+  final WorkerSearchService _searchService = WorkerSearchService();
+  final FavoriteWorkersService _favoriteService = FavoriteWorkersService();
+
+  // Search & Filter states
   String searchQuery = '';
   bool showSearchResults = false;
   String selectedCategory = 'Toutes Catégories';
   bool isSearchActive = false;
-
-  // Filter states
-  String priceSort = 'none';
   String ratingSort = 'none';
   String distanceSort = 'none';
   String selectedArea = 'Toutes Zones';
@@ -33,158 +40,192 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   // Location states
   LatLng? _clientLocation;
   bool _isLocationLoading = false;
+  final LocationService _locationService = LocationService(); // ✅ جديد
+
+  // Data from Backend
+  List<String> categories = ['Toutes Catégories'];
+  List<String> nouakchottAreas = ['Toutes Zones'];
+  List<WorkerSearchResult> workers = [];
+  List<Map<String, dynamic>> allServicesData = [];
+
+  // Loading states
+  bool _isLoadingWorkers = true;
+  bool _isLoadingFilters = true;
+  String? _errorMessage;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
-  final List<String> categories = [
-    'Toutes Catégories',
-    'Nettoyage Maison',
-    'Réparation Électroménager',
-    'Plomberie',
-    'Déménagement',
-    'Électricité',
-    'Peinture',
-    'Menuiserie',
-    'Jardinage',
-    'Lavage Auto',
-    'Lutte Antiparasitaire',
-    'Services Sécurité',
-    'Photographie',
-    'Traiteur',
-    'Entraîneur Personnel',
-    'Cours Particuliers',
-    'Soins Animaux',
-    'Beauté & Salon',
-    'Support Informatique',
-    'Soins de Santé',
-    'Blanchisserie'
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _searchFocusNode.addListener(() {
+      if (_searchFocusNode.hasFocus) {
+        setState(() {
+          isSearchActive = true;
+        });
+      }
+    });
+    _loadInitialData();
 
-  final List<String> nouakchottAreas = [
-    'Toutes Zones',
-    'Tevragh Zeina',
-    'Riad',
-    'Dar Naim',
-    'Tojounin',
-    'Arafat',
-    'Port',
-    'Carrefour',
-    'Sebkha',
-    'Tarhil',
-    'Wahdah',
-    'Riyad',
-    'El Houde Ech Chargui'
-  ];
+    // ✅ عند العودة للشاشة، حدّث البيانات
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshFavoriteStates();
+    });
+  }
 
-  // بيانات العمال مع إحداثيات GPS
-  List<Map<String, dynamic>> topWorkers = [
-    {
-      'name': 'CrispCloth',
-      'service': 'Blanchisserie',
-      'category': 'Blanchisserie',
-      'rating': 4.8,
-      'distance': '0.8 km',
-      'time': '5 Min',
-      'price': '500-2500 MRU',
-      'minPrice': 500,
-      'image': 'assets/worker1.jpg',
-      'isFavorite': false,
-      'area': 'Tevragh Zeina',
-      'phone': '+222 12345678',
-      'coordinates': LatLng(18.0856, -15.9785),
-      'calculatedDistance': null,
-    },
-    {
-      'name': 'Squeaky Clean',
-      'service': 'Blanchisserie',
-      'category': 'Blanchisserie',
-      'rating': 4.7,
-      'distance': '1.2 km',
-      'time': '10 Min',
-      'price': '200-1600 MRU',
-      'minPrice': 200,
-      'image': 'assets/worker2.jpg',
-      'isFavorite': true,
-      'area': 'Riad',
-      'phone': '+222 87654321',
-      'coordinates': LatLng(18.0742, -15.9345),
-      'calculatedDistance': null,
-    },
-    {
-      'name': 'PureCare Laundry',
-      'service': 'Blanchisserie',
-      'category': 'Blanchisserie',
-      'rating': 4.8,
-      'distance': '2.1 km',
-      'time': '15 Min',
-      'price': '300-3200 MRU',
-      'minPrice': 300,
-      'image': 'assets/worker3.jpg',
-      'isFavorite': false,
-      'area': 'Dar Naim',
-      'phone': '+222 11223344',
-      'coordinates': LatLng(18.0892, -15.9234),
-      'calculatedDistance': null,
-    },
-    {
-      'name': 'Ahmed ElKhadem',
-      'service': 'Plomberie',
-      'category': 'Plomberie',
-      'rating': 4.9,
-      'distance': '1.5 km',
-      'time': '8 Min',
-      'price': '1000-5000 MRU',
-      'minPrice': 1000,
-      'image': 'assets/worker4.jpg',
-      'isFavorite': true,
-      'area': 'Tojounin',
-      'phone': '+222 55667788',
-      'coordinates': LatLng(18.0423, -15.9876),
-      'calculatedDistance': null,
-    },
-    {
-      'name': 'Omar Fixing',
-      'service': 'Électricité',
-      'category': 'Électricité',
-      'rating': 4.6,
-      'distance': '0.9 km',
-      'time': '12 Min',
-      'price': '800-4000 MRU',
-      'minPrice': 800,
-      'image': 'assets/worker5.jpg',
-      'isFavorite': false,
-      'area': 'Arafat',
-      'phone': '+222 99887766',
-      'coordinates': LatLng(18.0567, -15.9712),
-      'calculatedDistance': null,
-    },
-    {
-      'name': 'Clean House Pro',
-      'service': 'Nettoyage Maison',
-      'category': 'Nettoyage Maison',
-      'rating': 4.5,
-      'distance': '2.3 km',
-      'time': '20 Min',
-      'price': '400-2000 MRU',
-      'minPrice': 400,
-      'image': 'assets/worker6.jpg',
-      'isFavorite': false,
-      'area': 'Port',
-      'phone': '+222 44556677',
-      'coordinates': LatLng(18.0868, -15.9560),
-      'calculatedDistance': null,
-    },
-  ];
+  Future<void> _refreshFavoriteStates() async {
+    // هذا يُعيد تحميل البيانات وتحديث isFavorite من Backend
+    await _searchWorkers();
+  }
 
-  /// طلب إذن الموقع باستخدام الواجهة المخصصة
-  Future<void> _requestLocationAndCalculateDistances() async {
-    // الخطوة 1: عرض الواجهة المخصصة أولاً
+  /// ✅ جلب البيانات الأولية (Categories, Areas, Top Workers)
+  Future<void> _loadInitialData() async {
+    await Future.wait([
+      _loadFilters(),
+      _loadTopWorkers(),
+    ]);
+  }
+
+  /// ✅ جلب الفلاتر (Categories + Areas)
+// ✅ استخدم CategoryService بدلاً من WorkerSearchService
+
+  Future<void> _loadFilters() async {
+    setState(() {
+      _isLoadingFilters = true;
+    });
+
+    try {
+      final categoriesResult = await categoryService.getServiceCategories();
+      final areasResult =
+          await categoryService.getNouakchottAreas(simple: true);
+
+      if (categoriesResult['ok'] && areasResult['ok']) {
+        final cats = categoriesResult['categories'] as List<ServiceCategory>;
+        final areas = areasResult['areas'] as List<NouakchottArea>;
+
+        setState(() {
+          categories = ['Toutes Catégories'] + cats.map((c) => c.name).toList();
+          nouakchottAreas =
+              ['Toutes Zones'] + areas.map((a) => a.name).toList();
+
+          // ✅ مع null safety
+          allServicesData = cats
+              .map((cat) => {
+                    'name': cat.name ?? 'Service',
+                    'icon': cat.icon ?? 'category',
+                    'category': cat.name ?? 'Service',
+                  })
+              .toList();
+
+          _isLoadingFilters = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Échec du chargement';
+          _isLoadingFilters = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      setState(() {
+        _errorMessage = 'Erreur réseau';
+        _isLoadingFilters = false;
+      });
+    }
+  }
+
+  /// ✅ جلب أفضل 10 عمال
+  Future<void> _loadTopWorkers() async {
+    setState(() {
+      _isLoadingWorkers = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await _searchService.getTopWorkers(limit: 10);
+
+      if (result['ok']) {
+        setState(() {
+          workers = result['workers'] as List<WorkerSearchResult>;
+          _isLoadingWorkers = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = result['error'] ?? 'Échec du chargement';
+          _isLoadingWorkers = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading workers: $e');
+      setState(() {
+        _errorMessage = 'Erreur réseau';
+        _isLoadingWorkers = false;
+      });
+    }
+  }
+
+  /// ✅ البحث عن العمال مع الفلاتر
+  Future<void> _searchWorkers() async {
+    setState(() {
+      _isLoadingWorkers = true;
+      _errorMessage = null;
+    });
+
+    try {
+      String? sortBy;
+      if (ratingSort == 'desc') sortBy = 'rating';
+      if (distanceSort == 'asc') sortBy = 'nearest';
+      if (ratingSort == 'desc') sortBy = 'rating';
+      if (distanceSort == 'asc') sortBy = 'nearest';
+
+      final result = await _searchService.searchWorkers(
+        category:
+            selectedCategory != 'Toutes Catégories' ? selectedCategory : null,
+        area: selectedArea != 'Toutes Zones' ? selectedArea : null,
+        search: searchQuery.isNotEmpty ? searchQuery : null,
+        sortBy: sortBy,
+        clientLat: _clientLocation?.latitude,
+        clientLng: _clientLocation?.longitude,
+        limit: showSearchResults ? null : 10,
+      );
+
+      if (result['ok']) {
+        List<WorkerSearchResult> loadedWorkers =
+            result['workers'] as List<WorkerSearchResult>;
+
+        // ✅ اطبع لتصحيح الأخطاء
+        print('📊 Loaded Workers:');
+        for (var worker in loadedWorkers) {
+          print(
+              '  - ${worker.name}: isFavorite=${worker.isFavorite}, id=${worker.id}');
+        }
+
+        setState(() {
+          workers = loadedWorkers;
+          _isLoadingWorkers = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = result['error'] ?? 'Échec du chargement';
+          _isLoadingWorkers = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error searching workers: $e');
+      setState(() {
+        _errorMessage = 'Erreur réseau';
+        _isLoadingWorkers = false;
+      });
+    }
+  }
+
+  /// طلب إذن الموقع
+  Future<void> _requestLocationFromGPS() async {
     final bool? userConsent =
         await ClientLocationPermissionScreen.showWhenNeeded(context);
 
     if (userConsent != true) {
-      // رفض المستخدم → إلغاء العملية مع رسالة توضيحية
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('يجب السماح بالوصول للموقع لإظهار العمال الأقرب إليك'),
@@ -197,181 +238,80 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       return;
     }
 
-    // الخطوة 2: موافقة المستخدم → بدء التحميل
     setState(() {
       _isLocationLoading = true;
     });
 
     try {
-      // التحقق من حالة خدمة الموقع
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showLocationServiceDialog();
+      final location = await _locationService.getCurrentLocation(
+        sendToBackend: false,
+      );
+
+      if (location != null) {
+        setState(() {
+          _clientLocation = location;
+          distanceSort = 'asc';
+          ratingSort = 'none';
+          _isLocationLoading = false;
+        });
+
+        print(
+            '📍 Client Location from GPS: ${location.latitude}, ${location.longitude}');
+        await _searchWorkers();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم تحديد موقعك وترتيب العمال حسب المسافة'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
         setState(() {
           _isLocationLoading = false;
         });
-        return;
+        _showLocationErrorDialog();
       }
-
-      // الخطوة 3: طلب إذن النظام
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showPermissionDeniedDialog();
-          setState(() {
-            _isLocationLoading = false;
-          });
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _showPermissionDeniedForeverDialog();
-        setState(() {
-          _isLocationLoading = false;
-        });
-        return;
-      }
-
-      // الخطوة 4: الحصول على الموقع
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 30),
-      );
-
-      _clientLocation = LatLng(position.latitude, position.longitude);
-
-      // الخطوة 5: حساب المسافات
-      _calculateDistancesForWorkers();
-
-      // الخطوة 6: تفعيل فلتر المسافة وتحديث الواجهة
-      setState(() {
-        distanceSort = 'asc';
-        priceSort = 'none';
-        ratingSort = 'none';
-        _isLocationLoading = false;
-      });
-
-      // رسالة نجاح
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('تم تحديد موقعك وترتيب العمال حسب المسافة'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
     } catch (e) {
-      _showLocationErrorDialog();
+      print('❌ Error getting location: $e');
       setState(() {
         _isLocationLoading = false;
       });
+      _showLocationErrorDialog();
     }
   }
 
-  /// حساب المسافات للعمال
-  void _calculateDistancesForWorkers() {
-    if (_clientLocation == null) return;
-
-    for (var worker in topWorkers) {
-      double distanceKm = Geolocator.distanceBetween(
-            _clientLocation!.latitude,
-            _clientLocation!.longitude,
-            worker['coordinates'].latitude,
-            worker['coordinates'].longitude,
-          ) /
-          1000;
-
-      worker['calculatedDistance'] = distanceKm;
-      worker['distance'] = distanceKm < 1
-          ? '${(distanceKm * 1000).round()} m'
-          : '${distanceKm.toStringAsFixed(1)} km';
-    }
-  }
-
-  /// معالجة فلتر "الأقرب لي"
   void _handleClosestFilter() {
     if (distanceSort == 'asc' && _clientLocation != null) {
-      // إذا كان مفعل، قم بإلغائه
       setState(() {
         distanceSort = 'none';
       });
+      _searchWorkers();
     } else {
-      // إذا لم يكن مفعل، اطلب الموقع
-      _requestLocationAndCalculateDistances();
+      _requestLocationFromGPS();
     }
   }
 
   void _onFilterChanged(Map<String, String> filters) {
     setState(() {
-      priceSort = filters['priceSort']!;
       ratingSort = filters['ratingSort']!;
       distanceSort = filters['distanceSort']!;
       selectedArea = filters['selectedArea']!;
+
+      // ✅ أضف هذا: اجعل showSearchResults = true عند تطبيق أي فرز
+      // بحيث يبقى زر Effacer Recherche ظاهر
+      if (selectedCategory != 'Toutes Catégories' || searchQuery.isNotEmpty) {
+        showSearchResults = true;
+      }
     });
 
-    // إذا تم اختيار فلتر المسافة ولا يوجد موقع
     if (distanceSort == 'asc' && _clientLocation == null) {
-      _requestLocationAndCalculateDistances();
+      _requestLocationFromGPS();
+    } else {
+      _searchWorkers();
     }
-  }
-
-  List<Map<String, dynamic>> get filteredWorkers {
-    List<Map<String, dynamic>> filtered = List.from(topWorkers);
-
-    if (searchQuery.isNotEmpty) {
-      filtered = filtered.where((worker) {
-        return worker['name']
-                .toLowerCase()
-                .contains(searchQuery.toLowerCase()) ||
-            worker['service']
-                .toLowerCase()
-                .contains(searchQuery.toLowerCase()) ||
-            worker['category']
-                .toLowerCase()
-                .contains(searchQuery.toLowerCase());
-      }).toList();
-    }
-
-    if (selectedCategory != 'Toutes Catégories') {
-      filtered = filtered
-          .where((worker) => worker['category'] == selectedCategory)
-          .toList();
-    }
-
-    if (selectedArea != 'Toutes Zones') {
-      filtered =
-          filtered.where((worker) => worker['area'] == selectedArea).toList();
-    }
-
-    // ترتيب النتائج
-    if (priceSort != 'none') {
-      if (priceSort == 'asc') {
-        filtered.sort((a, b) => a['minPrice'].compareTo(b['minPrice']));
-      } else {
-        filtered.sort((a, b) => b['minPrice'].compareTo(a['minPrice']));
-      }
-    } else if (ratingSort != 'none') {
-      if (ratingSort == 'desc') {
-        filtered.sort((a, b) => b['rating'].compareTo(a['rating']));
-      } else {
-        filtered.sort((a, b) => a['rating'].compareTo(b['rating']));
-      }
-    } else if (distanceSort != 'none' && _clientLocation != null) {
-      // ترتيب حسب المسافة المحسوبة
-      if (distanceSort == 'asc') {
-        filtered.sort((a, b) => (a['calculatedDistance'] ?? double.infinity)
-            .compareTo(b['calculatedDistance'] ?? double.infinity));
-      } else {
-        filtered.sort((a, b) => (b['calculatedDistance'] ?? 0.0)
-            .compareTo(a['calculatedDistance'] ?? 0.0));
-      }
-    }
-
-    return filtered;
   }
 
   void _performSearch() {
@@ -392,9 +332,50 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       showSearchResults = true;
       isSearchActive = true;
     });
+
+    _searchWorkers();
   }
 
-  // نوافذ الحوار للأخطاء
+  void _resetSearch() {
+    setState(() {
+      showSearchResults = false;
+      searchQuery = '';
+      isSearchActive = false;
+      selectedCategory = 'Toutes Catégories';
+      _searchController.clear();
+      _resetFilters();
+    });
+    _searchFocusNode.unfocus();
+    _loadTopWorkers();
+  }
+
+  void _resetFilters() {
+    setState(() {
+      ratingSort = 'none';
+      distanceSort = 'none';
+      selectedArea = 'Toutes Zones';
+      _clientLocation = null;
+    });
+  }
+
+  void _onCategorySelected(String category) {
+    setState(() {
+      selectedCategory = category;
+      // ✅ التصحيح: ابدأ البحث مباشرة عند اختيار فئة
+      if (category != 'Toutes Catégories') {
+        showSearchResults = true;
+        isSearchActive = true;
+      } else {
+        showSearchResults = false;
+        isSearchActive = false;
+      }
+    });
+
+    // ✅ ابدأ البحث في كل الحالات
+    _searchWorkers();
+  }
+
+  // نوافذ الحوار
   void _showLocationServiceDialog() {
     showDialog(
       context: context,
@@ -510,21 +491,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildCleanFilterItem('Prix', priceSort, () {
-                        setState(() {
-                          if (priceSort == 'none') {
-                            priceSort = 'asc';
-                          } else if (priceSort == 'asc') {
-                            priceSort = 'desc';
-                          } else {
-                            priceSort = 'none';
-                          }
-                          ratingSort = 'none';
-                          distanceSort = 'none';
-                        });
-                        Navigator.pop(context);
-                      }),
-                      _buildDivider(),
                       _buildCleanFilterItem('Note', ratingSort, () {
                         setState(() {
                           if (ratingSort == 'none') {
@@ -534,10 +500,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                           } else {
                             ratingSort = 'none';
                           }
-                          priceSort = 'none';
                           distanceSort = 'none';
                         });
                         Navigator.pop(context);
+                        _searchWorkers();
                       }),
                       _buildDivider(),
                       _buildDistanceFilterItem(),
@@ -552,6 +518,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       _buildCleanFilterItem('Réinitialiser', 'reset', () {
                         _resetFilters();
                         Navigator.pop(context);
+                        _searchWorkers();
                       }),
                     ],
                   ),
@@ -731,6 +698,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                       selectedArea = area;
                     });
                     Navigator.pop(context);
+                    _searchWorkers();
                   },
                 );
               },
@@ -741,54 +709,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  void _resetFilters() {
-    setState(() {
-      priceSort = 'none';
-      ratingSort = 'none';
-      distanceSort = 'none';
-      selectedArea = 'Toutes Zones';
-      selectedCategory = 'Toutes Catégories';
-      _clientLocation = null;
-    });
-  }
-
-  void _resetSearch() {
-    setState(() {
-      showSearchResults = false;
-      searchQuery = '';
-      isSearchActive = false;
-      selectedCategory = 'Toutes Catégories';
-      _searchController.clear();
-      _resetFilters();
-    });
-    _searchFocusNode.unfocus();
-  }
-
-  void _onCategorySelected(String category) {
-    setState(() {
-      selectedCategory = category;
-      if (isSearchActive) {
-        showSearchResults = true;
-      }
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _searchFocusNode.addListener(() {
-      if (_searchFocusNode.hasFocus) {
-        setState(() {
-          isSearchActive = true;
-        });
-      }
-    });
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _searchService.dispose();
     super.dispose();
   }
 
@@ -799,67 +724,76 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(isDark),
-              SizedBox(height: 24),
-              SearchBarWidget(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                onSearch: _performSearch,
-                onFilterTap: isSearchActive ? _showFiltersDropdown : null,
-                onSearchActiveChanged: (isActive) {
-                  setState(() {
-                    isSearchActive = isActive;
-                  });
-                },
-                onSearchChanged: (value) {
-                  setState(() {
-                    if (showSearchResults) {
-                      searchQuery = value;
-                    }
-                  });
-                },
-              ),
-              SizedBox(height: 16),
-              if (isSearchActive)
-                CategorySelectorWidget(
-                  categories: categories,
-                  selectedCategory: selectedCategory,
-                  onCategorySelected: _onCategorySelected,
+        child: _isLoadingFilters
+            ? Center(
+                child: CircularProgressIndicator(
+                  color: ThemeColors.primaryColor,
                 ),
-              SizedBox(height: 32),
-              if (!isSearchActive) ...[
-                _buildCategoriesSection(isDark),
-                SizedBox(height: 32),
-              ],
-              _buildResultsSection(isDark),
-              SizedBox(height: 16),
-              if (filteredWorkers.isEmpty)
-                _buildEmptyState(isDark)
-              else
-                ...filteredWorkers
-                    .map((worker) => WorkerCardWidget(
-                          worker: worker,
-                          onFavoriteToggle: () {
-                            setState(() {
-                              worker['isFavorite'] = !worker['isFavorite'];
-                            });
-                          },
-                          onPhoneCall: () {
-                            _makePhoneCall(worker['phone']);
-                          },
-                          onChat: () {
-                            _openChat(worker);
-                          },
-                        ))
-                    .toList(),
-            ],
-          ),
-        ),
+              )
+            : SingleChildScrollView(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(isDark),
+                    SizedBox(height: 24),
+                    SearchBarWidget(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      onSearch: _performSearch,
+                      onFilterTap: isSearchActive ? _showFiltersDropdown : null,
+                      onSearchActiveChanged: (isActive) {
+                        setState(() {
+                          isSearchActive = isActive;
+                        });
+                      },
+                      onSearchChanged: (value) {
+                        setState(() {
+                          searchQuery = value;
+                        });
+                      },
+                    ),
+                    SizedBox(height: 16),
+                    if (isSearchActive)
+                      CategorySelectorWidget(
+                        categories: categories,
+                        selectedCategory: selectedCategory,
+                        onCategorySelected: _onCategorySelected,
+                      ),
+                    SizedBox(height: 32),
+                    if (!isSearchActive) ...[
+                      _buildCategoriesSection(isDark),
+                      SizedBox(height: 32),
+                    ],
+                    _buildResultsSection(isDark),
+                    SizedBox(height: 16),
+                    if (_isLoadingWorkers)
+                      Center(
+                        child: CircularProgressIndicator(
+                          color: ThemeColors.primaryColor,
+                        ),
+                      )
+                    else if (_errorMessage != null)
+                      _buildErrorState(isDark)
+                    else if (workers.isEmpty)
+                      _buildEmptyState(isDark)
+                    else
+                      ...workers
+                          .map((worker) => WorkerCardWidget(
+                                worker: worker,
+                                onFavoriteChanged: () {
+                                  // ✅ عند تغيير المفضلة، أعد تحميل البيانات
+                                  _searchWorkers();
+                                },
+                                onPhoneCall: null,
+                                onChat: () {
+                                  _openChat(worker);
+                                },
+                              ))
+                          .toList(),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -880,6 +814,52 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   Widget _buildCategoriesSection(bool isDark) {
+    // ✅ إذا لم تُحمّل الخدمات، اعرض 4 categories افتراضية
+    if (allServicesData.isEmpty) {
+      return Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Catégories',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark
+                      ? ThemeColors.darkTextPrimary
+                      : ThemeColors.lightTextPrimary,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _showAllServices(context),
+                child: Text(
+                  'Voir tout',
+                  style: TextStyle(
+                    color: ThemeColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildCategoryItem(Icons.cleaning_services, 'Nettoyage', isDark),
+              _buildCategoryItem(Icons.build, 'Réparation', isDark),
+              _buildCategoryItem(Icons.plumbing, 'Plomberie', isDark),
+              _buildCategoryItem(Icons.local_shipping, 'Déménagement', isDark),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // ✅ عرض أول 12 من Backend
+    final displayCategories = allServicesData.take(12).toList();
+
     return Column(
       children: [
         Row(
@@ -908,17 +888,45 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           ],
         ),
         SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildCategoryItem(Icons.cleaning_services, 'Nettoyage', isDark),
-            _buildCategoryItem(Icons.build, 'Réparation', isDark),
-            _buildCategoryItem(Icons.plumbing, 'Plomberie', isDark),
-            _buildCategoryItem(Icons.local_shipping, 'Déménagement', isDark),
-          ],
-        ),
+        Container(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal, // ✅ horizontal scroll
+            itemCount: displayCategories.length,
+            itemBuilder: (context, index) {
+              final service = displayCategories[index];
+              return Container(
+                width: 80, // ✅ عرض ثابت لكل item
+                margin: EdgeInsets.only(right: 12),
+                child: _buildCategoryItem(
+                  _getIconFromString(service['icon']),
+                  service['name'],
+                  isDark,
+                ),
+              );
+            },
+          ),
+        )
       ],
     );
+  }
+
+  IconData _getIconFromString(dynamic iconData) {
+    if (iconData is String) {
+      switch (iconData.toLowerCase()) {
+        case 'cleaning_services':
+          return Icons.cleaning_services;
+        case 'build':
+          return Icons.build;
+        case 'plumbing':
+          return Icons.plumbing;
+        case 'local_shipping':
+          return Icons.local_shipping;
+        default:
+          return Icons.category;
+      }
+    }
+    return Icons.category;
   }
 
   Widget _buildCategoryItem(IconData icon, String label, bool isDark) {
@@ -959,11 +967,25 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   Widget _buildResultsSection(bool isDark) {
+    // ✅ اطبع للتصحيح
+    bool shouldShowClearButton = showSearchResults ||
+        selectedCategory != 'Toutes Catégories' ||
+        searchQuery.isNotEmpty ||
+        selectedArea != 'Toutes Zones' ||
+        ratingSort != 'none' ||
+        distanceSort != 'none';
+
+    print(
+        '🔍 Results Section - showSearchResults: $showSearchResults, selectedCategory: $selectedCategory, searchQuery: $searchQuery, selectedArea: $selectedArea, ratingSort: $ratingSort, distanceSort: $distanceSort');
+    print('🔘 Should show clear button: $shouldShowClearButton');
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          showSearchResults ? 'Résultats de recherche' : 'Meilleurs Ouvriers',
+          shouldShowClearButton
+              ? 'Résultats de recherche'
+              : 'Meilleurs Ouvriers',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -972,7 +994,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                 : ThemeColors.lightTextPrimary,
           ),
         ),
-        if (showSearchResults)
+        // ✅ اعرض "Effacer recherche" دائماً عند البحث أو الفرز
+        if (shouldShowClearButton)
           GestureDetector(
             onTap: _resetSearch,
             child: Text(
@@ -985,13 +1008,57 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           )
         else
           Text(
-            'Voir tout',
+            'Voir plus',
             style: TextStyle(
               color: ThemeColors.primaryColor,
               fontWeight: FontWeight.w600,
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildErrorState(bool isDark) {
+    return Center(
+      child: Column(
+        children: [
+          SizedBox(height: 50),
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red,
+          ),
+          SizedBox(height: 16),
+          Text(
+            _errorMessage!,
+            style: TextStyle(
+              fontSize: 16,
+              color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              if (showSearchResults) {
+                _searchWorkers();
+              } else {
+                _loadTopWorkers();
+              }
+            },
+            icon: Icon(Icons.refresh),
+            label: Text('Réessayer'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ThemeColors.primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1018,12 +1085,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  void _makePhoneCall(String phone) {
-    print('Calling: $phone');
-  }
-
-  void _openChat(Map<String, dynamic> worker) {
-    print('Opening chat with: ${worker['name']}');
+  void _openChat(WorkerSearchResult worker) {
+    print('Opening chat with: ${worker.name}');
+    // TODO: Implement chat functionality
   }
 
   void _showAllServices(BuildContext context) {
@@ -1039,6 +1103,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               searchQuery = selectedCategory;
               isSearchActive = true;
             });
+            _searchWorkers();
           },
         ),
       ),
