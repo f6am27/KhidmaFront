@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../screens/client_screens/home/home_screen.dart';
 import '../../screens/client_screens/favorites/favorites_screen.dart';
-import '../../screens/client_screens/messages/messages_screen.dart';
+import '../screens/shared_screens/messages/messages_list_screen.dart';
 import '../../screens/client_screens/profile/profile_screen.dart';
 import '../../screens/client_screens/missions/tasks_screen.dart'; // تغيير المسار
 import '../../core/theme/theme_colors.dart';
@@ -17,8 +17,8 @@ class _ClientMainNavigationState extends State<ClientMainNavigation> {
   final List<Widget> _pages = [
     ClientHomeScreen(),
     FavoritesScreen(),
-    TasksScreen(), // تغيير الصفحة من Container إلى TasksScreen
-    MessagesScreen(),
+    TasksScreen(),
+    MessagesListScreen(),
     ProfileScreen(),
   ];
 

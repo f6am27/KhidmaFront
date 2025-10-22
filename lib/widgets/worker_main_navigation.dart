@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../screens/worker_screens/home/worker_home_screen.dart';
 import '../screens/worker_screens/mission/worker_tasks_screen.dart';
-import '../screens/worker_screens/messages/worker_messages_screen.dart';
+import '../screens/shared_screens/messages/messages_list_screen.dart';
 import '../screens/worker_screens/profile/profile_screen.dart';
 import '../screens/worker_screens/explore/explore_screen.dart';
 
@@ -24,7 +24,7 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
     // TODO: Ajouter MyTasksScreen
     WorkerTasksScreen(),
     // TODO: Ajouter MessagesScreen (réutiliser client)
-    WorkerMessagesScreen(),
+    MessagesListScreen(),
     // TODO: Ajouter ProfileScreen (adapter client)
     WorkerProfileScreen(),
   ];

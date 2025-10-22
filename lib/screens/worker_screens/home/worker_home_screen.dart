@@ -7,6 +7,7 @@ import '../../../services/location_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'worker_opportunities_screen.dart';
 import '../../../services/auth_manager.dart';
+import '../../../core/config/api_config.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -31,6 +32,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // ← تم الإضافة
+    _setWorkerOnline(); // ✅ أضف هذا السطر
     _loadLocationState();
     _checkAndStartTracking();
     _loadTasks();
@@ -1254,6 +1256,24 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       } else {
         print('⏭️ Skipping backend call - user logged out');
       }
+    }
+  }
+
+  Future<void> _setWorkerOnline() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'POST',
+        endpoint: '${ApiConfig.baseUrl()}/set-online/',
+        body: {'is_online': true},
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Worker set to online');
+      } else {
+        print('⚠️ Failed to set online: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error setting online: $e');
     }
   }
 

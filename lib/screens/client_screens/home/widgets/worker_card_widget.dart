@@ -3,6 +3,8 @@ import '../../../../core/theme/theme_colors.dart';
 import '../../../../models/worker_search_model.dart';
 import '../../../../services/favorite_workers_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../shared_screens/messages/chat_screen.dart';
+import '../../../../services/chat_service.dart';
 
 class WorkerCardWidget extends StatefulWidget {
   final WorkerSearchResult worker; // ✅ تغيير من Map إلى Model
@@ -142,6 +144,39 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _openChat(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await chatService.startConversation(widget.worker.id);
+    Navigator.pop(context);
+
+    if (result['ok']) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            conversationId: result['conversation_id'],
+            contactName: widget.worker.name,
+            contactId: widget.worker.id,
+            isOnline: false,
+            profileImageUrl: widget.worker.image,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: ${result['error']}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -351,7 +386,7 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
             ),
             SizedBox(width: 4),
             GestureDetector(
-              onTap: widget.onChat,
+              onTap: () => _openChat(context),
               child: Padding(
                 padding: EdgeInsets.all(4),
                 child: Icon(
