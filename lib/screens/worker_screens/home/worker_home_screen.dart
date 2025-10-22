@@ -6,6 +6,7 @@ import '../../../services/task_service.dart';
 import '../../../services/location_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'worker_opportunities_screen.dart';
+import '../../../services/auth_manager.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -1238,12 +1239,21 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   }
 
 // ✅ دالة مشتركة
-  void _handleAppClosing() {
+  Future<void> _handleAppClosing() async {
     print('🔴 Setting worker offline');
 
     if (_isLocationEnabled) {
+      // 1. أوقف التتبع المحلي فقط
       locationService.stopPeriodicTracking();
-      locationService.toggleLocationSharing(false);
+
+      // 2. تحقق من وجود Token قبل استدعاء Backend
+      final isAuthenticated = await AuthManager.isAuthenticated();
+      if (isAuthenticated) {
+        // فقط إذا كان مسجل دخول، أرسل للـ Backend
+        await locationService.toggleLocationSharing(false);
+      } else {
+        print('⏭️ Skipping backend call - user logged out');
+      }
     }
   }
 
@@ -1251,7 +1261,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
 
-    // ✅ استدعاء نفس الدالة
+    // ✅ استدعاء async function
     _handleAppClosing();
 
     super.dispose();

@@ -17,6 +17,7 @@ class TokenStorage {
   static const String _accessKey = 'access_token';
   static const String _refreshKey = 'refresh_token';
   static const String _userKey = 'user_data';
+  static const String _roleKey = 'user_role';
 
   /// حفظ JWT tokens بأمان
   static Future<void> save(String accessToken, String refreshToken) async {
@@ -69,12 +70,30 @@ class TokenStorage {
     }
   }
 
+  /// حفظ نوع المستخدم (role)
+  static Future<void> saveUserRole(String role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_roleKey, role);
+  }
+
+  /// قراءة نوع المستخدم (role)
+  static Future<String?> readUserRole() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_roleKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// مسح جميع البيانات المحفوظة (تسجيل الخروج)
   static Future<void> clear() async {
     await Future.wait([
       _secureStorage.delete(key: _accessKey),
       _secureStorage.delete(key: _refreshKey),
       SharedPreferences.getInstance().then((prefs) => prefs.remove(_userKey)),
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.remove(_roleKey)), // ✅ أضف هذا
     ]);
   }
 

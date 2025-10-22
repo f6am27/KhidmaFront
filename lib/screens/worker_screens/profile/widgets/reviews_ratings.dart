@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/theme_colors.dart';
+import '../../../../models/review_model.dart';
+import '../../../../services/task_service.dart';
 
 class ReviewsRatingsScreen extends StatefulWidget {
   @override
@@ -8,13 +10,21 @@ class ReviewsRatingsScreen extends StatefulWidget {
 
 class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
   final TextEditingController _searchController = TextEditingController();
+
+  late Future<Map<String, dynamic>> _reviewsFuture;
+  List<ReviewModel> _allReviews = [];
   List<ReviewModel> filteredReviews = [];
+  ReviewStatisticsModel? _statistics;
+
   String selectedFilter = 'all'; // all, 5, 4, 3, 2, 1
+  int _currentOffset = 0;
+  final int _limit = 20;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
-    filteredReviews = _reviews;
+    _loadReviews();
   }
 
   @override
@@ -23,34 +33,36 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
     super.dispose();
   }
 
-  void _filterReviews(String query) {
-    setState(() {
-      if (query.isEmpty) {
-        filteredReviews = _getFilteredByRating();
-      } else {
-        filteredReviews = _getFilteredByRating()
-            .where((review) =>
-                review.clientName.toLowerCase().contains(query.toLowerCase()) ||
-                review.comment.toLowerCase().contains(query.toLowerCase()) ||
-                review.serviceName.toLowerCase().contains(query.toLowerCase()))
-            .toList();
-      }
-    });
+  void _loadReviews({bool loadMore = false}) {
+    if (loadMore) {
+      _currentOffset += _limit;
+    } else {
+      _currentOffset = 0;
+    }
+
+    int? ratingFilter =
+        selectedFilter != 'all' ? int.parse(selectedFilter) : null;
+
+    _reviewsFuture = taskService.getMyReviews(
+      rating: ratingFilter,
+      search: _searchController.text.isNotEmpty ? _searchController.text : null,
+      ordering: '-created_at',
+      limit: _limit,
+      offset: _currentOffset,
+    );
   }
 
-  List<ReviewModel> _getFilteredByRating() {
-    if (selectedFilter == 'all') {
-      return _reviews;
-    } else {
-      int rating = int.parse(selectedFilter);
-      return _reviews.where((review) => review.rating == rating).toList();
-    }
+  void _filterReviews(String query) {
+    setState(() {
+      _loadReviews();
+    });
   }
 
   void _applyRatingFilter(String filter) {
     setState(() {
       selectedFilter = filter;
-      _filterReviews(_searchController.text);
+      _currentOffset = 0;
+      _loadReviews();
     });
   }
 
@@ -63,49 +75,149 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
         title: Text('Avis & Évaluations'),
         centerTitle: true,
       ),
-      body: Column(
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _reviewsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildLoadingState();
+          }
+
+          if (snapshot.hasError) {
+            return _buildErrorState(snapshot.error.toString(), isDark);
+          }
+
+          if (!snapshot.hasData || snapshot.data!['ok'] == false) {
+            return _buildErrorState(
+              snapshot.data?['error'] ?? 'Failed to load data',
+              isDark,
+            );
+          }
+
+          final reviews = snapshot.data!['reviews'] as List<ReviewModel>;
+          final stats = snapshot.data!['statistics'] as ReviewStatisticsModel;
+
+          _allReviews = reviews;
+          filteredReviews = reviews;
+          _statistics = stats;
+
+          if (reviews.isEmpty &&
+              selectedFilter == 'all' &&
+              _searchController.text.isEmpty) {
+            return _buildEmptyState(context, isDark);
+          }
+
+          return Column(
+            children: [
+              // Statistics summary
+              _buildRatingsSummary(context, stats, isDark),
+
+              // Search bar
+              _buildSearchBar(context, isDark),
+
+              // Rating filters
+              _buildRatingFilters(context, isDark),
+
+              // Reviews list
+              Expanded(
+                child: filteredReviews.isEmpty
+                    ? _buildNoResultsState(context, isDark)
+                    : ListView.separated(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: filteredReviews.length + 1,
+                        separatorBuilder: (context, index) =>
+                            SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          if (index == filteredReviews.length) {
+                            // Load more button
+                            if (filteredReviews.length >= _limit) {
+                              return Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                child: Center(
+                                  child: _isLoadingMore
+                                      ? CircularProgressIndicator()
+                                      : ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _isLoadingMore = true;
+                                              _loadReviews(loadMore: true);
+                                            });
+                                          },
+                                          child: Text('Charger plus'),
+                                        ),
+                                ),
+                              );
+                            }
+                            return SizedBox.shrink();
+                          }
+                          final review = filteredReviews[index];
+                          return _buildReviewCard(review, isDark);
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Statistics summary
-          _buildRatingsSummary(context, isDark),
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading ratings...'),
+        ],
+      ),
+    );
+  }
 
-          // Search bar
-          _buildSearchBar(context, isDark),
-
-          // Rating filters
-          _buildRatingFilters(context, isDark),
-
-          // Reviews list
-          Expanded(
-            child: filteredReviews.isEmpty
-                ? _buildEmptyState(context, isDark)
-                : ListView.separated(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: filteredReviews.length,
-                    separatorBuilder: (context, index) => SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final review = filteredReviews[index];
-                      return _buildReviewCard(review, isDark);
-                    },
+  Widget _buildErrorState(String errorMessage, bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'An error occurred',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          SizedBox(height: 8),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              errorMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.white70 : Colors.grey[600],
                   ),
+            ),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _currentOffset = 0;
+                _loadReviews();
+              });
+            },
+            child: Text('Retry'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRatingsSummary(BuildContext context, bool isDark) {
-    final totalReviews = _reviews.length;
-    final averageRating = _reviews.isEmpty
-        ? 0.0
-        : _reviews.fold<double>(0, (sum, review) => sum + review.rating) /
-            totalReviews;
-
-    // Count by rating
-    Map<int, int> ratingCounts = {};
-    for (int i = 1; i <= 5; i++) {
-      ratingCounts[i] = _reviews.where((r) => r.rating == i).length;
-    }
-
+  Widget _buildRatingsSummary(
+      BuildContext context, ReviewStatisticsModel stats, bool isDark) {
     return Container(
       margin: EdgeInsets.all(16),
       padding: EdgeInsets.all(20),
@@ -130,7 +242,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                 child: Column(
                   children: [
                     Text(
-                      averageRating.toStringAsFixed(1),
+                      stats.averageRating.toStringAsFixed(1),
                       style:
                           Theme.of(context).textTheme.displayMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -142,9 +254,9 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(5, (index) {
                         return Icon(
-                          index < averageRating.floor()
+                          index < stats.averageRating.floor()
                               ? Icons.star
-                              : (index < averageRating
+                              : (index < stats.averageRating
                                   ? Icons.star_half
                                   : Icons.star_border),
                           color: Colors.amber,
@@ -154,7 +266,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      '$totalReviews avis',
+                      '${stats.totalReviews} avis',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: isDark ? Colors.white70 : Colors.grey[600],
                           ),
@@ -169,9 +281,8 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                 child: Column(
                   children: List.generate(5, (index) {
                     final rating = 5 - index;
-                    final count = ratingCounts[rating] ?? 0;
-                    final percentage =
-                        totalReviews > 0 ? count / totalReviews : 0.0;
+                    final count = stats.getRatingCount(rating);
+                    final percentage = stats.getRatingPercentage(rating) / 100;
 
                     return Padding(
                       padding: EdgeInsets.symmetric(vertical: 2),
@@ -227,7 +338,14 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
       ),
       child: TextField(
         controller: _searchController,
-        onChanged: _filterReviews,
+        onChanged: (value) {
+          // Debounce search
+          Future.delayed(Duration(milliseconds: 500), () {
+            if (_searchController.text == value) {
+              _filterReviews(value);
+            }
+          });
+        },
         style: Theme.of(context).textTheme.bodyMedium,
         decoration: InputDecoration(
           hintText: 'Rechercher dans les avis...',
@@ -326,16 +444,11 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                 radius: 20,
                 backgroundColor:
                     isDark ? ThemeColors.darkSurface : Colors.grey[200],
-                backgroundImage: review.clientAvatar != null
-                    ? NetworkImage(review.clientAvatar!)
-                    : null,
-                child: review.clientAvatar == null
-                    ? Icon(
-                        Icons.person,
-                        size: 20,
-                        color: isDark ? Colors.white54 : Colors.grey[600],
-                      )
-                    : null,
+                child: Icon(
+                  Icons.person,
+                  size: 20,
+                  color: isDark ? Colors.white54 : Colors.grey[600],
+                ),
               ),
               SizedBox(width: 12),
               Expanded(
@@ -350,7 +463,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                           ),
                     ),
                     Text(
-                      _formatDate(review.date),
+                      _formatDate(review.createdAt),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: isDark ? Colors.white54 : Colors.grey[500],
                           ),
@@ -374,17 +487,18 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: _getServiceTypeColor(review.serviceType)
-                          .withOpacity(0.1),
+                      color: ThemeColors.primaryColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      review.serviceName,
+                      review.taskTitle,
                       style: TextStyle(
-                        color: _getServiceTypeColor(review.serviceType),
+                        color: ThemeColors.primaryColor,
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -394,9 +508,9 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
           SizedBox(height: 12),
 
           // Commentaire
-          if (review.comment.isNotEmpty) ...[
+          if (review.reviewText.isNotEmpty) ...[
             Text(
-              review.comment,
+              review.reviewText,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: isDark ? Colors.white70 : Colors.grey[700],
                     height: 1.4,
@@ -405,7 +519,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
             SizedBox(height: 12),
           ],
 
-          // Service details et prix
+          // Task details
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -416,42 +530,20 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
             ),
             child: Row(
               children: [
+                Icon(
+                  Icons.work_outline,
+                  size: 16,
+                  color: isDark ? Colors.white54 : Colors.grey[500],
+                ),
+                SizedBox(width: 8),
                 Expanded(
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.work_outline,
-                        size: 16,
-                        color: isDark ? Colors.white54 : Colors.grey[500],
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Service: ${review.serviceName}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: isDark ? Colors.white70 : Colors.grey[700],
-                            ),
-                      ),
-                    ],
+                  child: Text(
+                    'Tâche: ${review.taskTitle}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.white70 : Colors.grey[700],
+                        ),
                   ),
                 ),
-                if (review.servicePrice != null) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.attach_money,
-                        size: 16,
-                        color: ThemeColors.successColor,
-                      ),
-                      Text(
-                        '${review.servicePrice} MRU',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: ThemeColors.successColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
@@ -472,7 +564,7 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Aucun avis trouvé',
+            'Aucun avis reçu',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: isDark ? Colors.white70 : Colors.grey[600],
                 ),
@@ -490,23 +582,34 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
     );
   }
 
-  Color _getServiceTypeColor(String serviceType) {
-    switch (serviceType.toLowerCase()) {
-      case 'plomberie':
-        return Colors.blue;
-      case 'électricité':
-        return Colors.orange;
-      case 'nettoyage':
-        return Colors.green;
-      case 'jardinage':
-        return Colors.lightGreen;
-      case 'garde d\'enfants':
-        return Colors.pink;
-      case 'réparation':
-        return Colors.red;
-      default:
-        return ThemeColors.primaryColor;
-    }
+  Widget _buildNoResultsState(BuildContext context, bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 64,
+            color: isDark ? Colors.white38 : Colors.grey[400],
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Aucun résultat trouvé',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: isDark ? Colors.white70 : Colors.grey[600],
+                ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Essayez de modifier vos filtres',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey[500],
+                ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatDate(DateTime date) {
@@ -529,105 +632,4 @@ class _ReviewsRatingsScreenState extends State<ReviewsRatingsScreen> {
       return "${date.day}/${date.month}/${date.year}";
     }
   }
-
-  // Sample data
-  final List<ReviewModel> _reviews = [
-    ReviewModel(
-      id: '1',
-      clientName: 'Fatima Al-Zahra',
-      clientAvatar: null,
-      rating: 5,
-      comment:
-          'Excellent travail! Mohamed est très professionnel et ponctuel. La réparation de plomberie a été faite rapidement et proprement. Je le recommande vivement.',
-      serviceName: 'Réparation plomberie',
-      serviceType: 'Plomberie',
-      servicePrice: 3500,
-      date: DateTime.now().subtract(Duration(days: 2)),
-    ),
-    ReviewModel(
-      id: '2',
-      clientName: 'Ahmed Ould Salem',
-      clientAvatar: null,
-      rating: 4,
-      comment:
-          'Bon travail dans l\'ensemble. L\'installation électrique s\'est bien passée, juste un peu de retard sur l\'horaire prévu.',
-      serviceName: 'Installation électrique',
-      serviceType: 'Électricité',
-      servicePrice: 4200,
-      date: DateTime.now().subtract(Duration(days: 5)),
-    ),
-    ReviewModel(
-      id: '3',
-      clientName: 'Mariem Mint Mohamed',
-      clientAvatar: null,
-      rating: 5,
-      comment:
-          'Parfait! Mohamed a réparé ma fuite d\'eau très rapidement. Prix correct et service de qualité.',
-      serviceName: 'Réparation fuite',
-      serviceType: 'Plomberie',
-      servicePrice: 2800,
-      date: DateTime.now().subtract(Duration(days: 8)),
-    ),
-    ReviewModel(
-      id: '4',
-      clientName: 'Hassan Ba',
-      clientAvatar: null,
-      rating: 4,
-      comment:
-          'Très satisfait du service. Mohamed connaît bien son métier et explique bien ce qu\'il fait.',
-      serviceName: 'Maintenance électrique',
-      serviceType: 'Électricité',
-      servicePrice: 2500,
-      date: DateTime.now().subtract(Duration(days: 12)),
-    ),
-    ReviewModel(
-      id: '5',
-      clientName: 'Aicha Mint Ali',
-      clientAvatar: null,
-      rating: 3,
-      comment:
-          'Le travail a été fait correctement mais le délai était un peu long. Sinon pas de problème.',
-      serviceName: 'Réparation générale',
-      serviceType: 'Réparation',
-      servicePrice: 3000,
-      date: DateTime.now().subtract(Duration(days: 15)),
-    ),
-    ReviewModel(
-      id: '6',
-      clientName: 'Omar Ould Ahmed',
-      clientAvatar: null,
-      rating: 5,
-      comment:
-          'Excellent! Mohamed a installé ma nouvelle prise électrique parfaitement. Très professionnel et prix raisonnable.',
-      serviceName: 'Installation prise',
-      serviceType: 'Électricité',
-      servicePrice: 1800,
-      date: DateTime.now().subtract(Duration(days: 20)),
-    ),
-  ];
-}
-
-// Review model
-class ReviewModel {
-  final String id;
-  final String clientName;
-  final String? clientAvatar;
-  final int rating;
-  final String comment;
-  final String serviceName;
-  final String serviceType;
-  final int? servicePrice;
-  final DateTime date;
-
-  ReviewModel({
-    required this.id,
-    required this.clientName,
-    this.clientAvatar,
-    required this.rating,
-    required this.comment,
-    required this.serviceName,
-    required this.serviceType,
-    this.servicePrice,
-    required this.date,
-  });
 }

@@ -104,10 +104,12 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
   }
 
   Future<void> _makePhoneCall() async {
-    // إزالة علامة + من الرقم
-    String cleanPhone = widget.worker.phone.replaceAll('+', '');
+    // إزالة + وكود الدولة 222
+    String cleanPhone = widget.worker.phone
+        .replaceAll('+', '')
+        .replaceAll('222', '')
+        .trim(); // ✅ نفس التعديل
 
-    // استخدام tel:// بدلاً من tel: لفتح تطبيق الهاتف مع تعبئة الرقم فقط
     final phoneNumber = 'tel://$cleanPhone';
 
     print('📞 Opening dialer with: $cleanPhone');

@@ -130,7 +130,7 @@ class WorkerProfile {
       serviceArea: json['service_area'] ?? '',
       serviceCategory: json['service_category'] ?? '',
       basePrice: double.tryParse(json['base_price']?.toString() ?? '0') ?? 0.0,
-      profileImageUrl: json['profile_image'],
+      profileImageUrl: json['profile_image_url'] ?? json['profile_image'],
       availableDays: List<String>.from(json['available_days'] ?? []),
       workStartTime: json['work_start_time'] ?? '08:00',
       workEndTime: json['work_end_time'] ?? '18:00',

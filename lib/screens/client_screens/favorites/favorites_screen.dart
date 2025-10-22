@@ -4,6 +4,7 @@ import '../../../models/favorite_worker_model.dart';
 import '../../../services/favorite_workers_service.dart';
 import '../../../services/category_service.dart';
 import '../../../models/service_category_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class FavoritesScreen extends StatefulWidget {
   @override
@@ -702,16 +703,49 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  void _callWorker(FavoriteWorker worker) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Appel de ${worker.name}'),
-        backgroundColor: ThemeColors.successColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+  Future<void> _callWorker(FavoriteWorker worker) async {
+    // إزالة + وكود الدولة 222
+    String cleanPhone = worker.phone
+        .replaceAll('+', '')
+        .replaceAll('222', '')
+        .trim(); // ✅ إزالة المسافات الزائدة
+
+    // استخدام tel:// لفتح تطبيق الهاتف
+    final phoneNumber = 'tel://$cleanPhone';
+
+    print('📞 Opening dialer with: $cleanPhone');
+
+    try {
+      if (await canLaunch(phoneNumber)) {
+        await launch(phoneNumber);
+        print('✅ Dialer opened successfully');
+      } else {
+        final fallbackPhone = 'tel:$cleanPhone';
+        if (await canLaunch(fallbackPhone)) {
+          await launch(fallbackPhone);
+          print('✅ Dialer opened with fallback');
+        } else {
+          throw 'Cannot launch dialer';
+        }
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Numéro: $cleanPhone\n(Testé sur appareil réel uniquement)',
+              textAlign: TextAlign.center,
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
   }
 }

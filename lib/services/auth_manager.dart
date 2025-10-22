@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../core/config/api_config.dart';
 import '../core/storage/token_storage.dart';
+import '../services/location_service.dart';
 
 class AuthManager {
   static final AuthManager _instance = AuthManager._internal();
@@ -235,6 +236,88 @@ class AuthManager {
     await TokenStorage.clear();
     _isRefreshing = false;
     _waitingRequests.clear();
+  }
+
+  /// Logout with backend call
+  /// Logout with backend call
+  static Future<Map<String, dynamic>> logoutWithBackend() async {
+    try {
+      String? userRole;
+
+// 1. Try to read the role
+      try {
+        final userData = await TokenStorage.readUserData();
+        userRole = userData?['role'] as String?;
+
+        if (userRole == null) {
+          final accessToken = await TokenStorage.readAccess();
+          if (accessToken != null) {
+            final parts = accessToken.split('.');
+            if (parts.length == 3) {
+              final payload = parts[1];
+              final normalizedPayload =
+                  payload.padRight((payload.length + 3) & ~3, '=');
+              final decoded = base64Decode(normalizedPayload);
+              final payloadMap = jsonDecode(utf8.decode(decoded));
+              userRole = payloadMap['role'] as String?;
+            }
+          }
+        }
+
+        print('🔍 Detected user role: $userRole');
+
+        if (userRole != null) {
+          await TokenStorage.saveUserRole(userRole);
+        }
+      } catch (e) {
+        print('⚠️ Error detecting role: $e');
+      }
+
+// 2. Stop Location Tracking Locally (for workers only)
+      if (userRole == 'worker') {
+        try {
+          print('🔴 Setting worker offline');
+// Stop local tracking only - no Backend calls
+          final LocationService locationService = LocationService();
+          locationService.dispose();
+        } catch (e) {
+          print('⚠️ Error stopping location tracking: $e');
+        }
+      }
+
+// 3. Call the backend (it will stop the location in the database)
+      final baseUrl = ApiConfig.baseUrl();
+      final accessToken = await getValidAccessToken();
+
+      if (accessToken != null) {
+        try {
+          final response = await _client.post(
+            Uri.parse('$baseUrl/logout/'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $accessToken',
+            },
+          );
+
+          print('✅ Logout backend response: ${response.statusCode}');
+        } catch (e) {
+          print('⚠️ Logout backend error: $e');
+        }
+      }
+
+// 4. Clear Tokens
+      await logout();
+
+      return {
+        'ok': true,
+        'message': 'Successfully logged out',
+        'role': userRole
+      };
+    } catch (e) {
+      print('❌ Logout error: $e');
+      await logout();
+      return {'ok': false, 'error': 'An error occurred while logging out'};
+    }
   }
 
   /// Dispose resources

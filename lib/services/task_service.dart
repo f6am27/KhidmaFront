@@ -6,6 +6,7 @@ import '../models/task_model.dart';
 import '../models/task_application_model.dart';
 import 'auth_manager.dart';
 import 'service_category_mapper.dart';
+import '../models/review_model.dart';
 
 class TaskService {
   final String _baseUrl = ApiConfig.baseUrl().replaceAll('/users', '');
@@ -806,9 +807,124 @@ class TaskService {
     }
   }
 
-  // ==================== HELPER METHODS ====================
+  // ==================== REVIEWS ENDPOINTS ====================
 
-  /// Helper method to parse response body
+  /// Get my reviews (للعامل)
+  Future<Map<String, dynamic>> getMyReviews({
+    int? rating,
+    String? search,
+    String? ordering,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      String endpoint = '$_baseUrl/tasks/my-reviews/';
+      List<String> queryParams = [];
+
+      if (rating != null) queryParams.add('rating=$rating');
+      if (search != null && search.isNotEmpty)
+        queryParams.add('search=$search');
+      if (ordering != null) queryParams.add('ordering=$ordering');
+      queryParams.add('limit=$limit');
+      queryParams.add('offset=$offset');
+
+      endpoint += '?${queryParams.join('&')}';
+
+      print('📍 Fetching reviews: $endpoint');
+
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        endpoint: endpoint,
+      );
+
+      print('Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = _parseResponse(response);
+        final reviewsResponse = ReviewsResponseModel.fromJson(json);
+
+        print('✅ Loaded ${reviewsResponse.reviews.length} reviews');
+
+        return {
+          'ok': true,
+          'response': reviewsResponse,
+          'reviews': reviewsResponse.reviews,
+          'statistics': reviewsResponse.statistics,
+          'count': reviewsResponse.count,
+          'json': json,
+        };
+      } else {
+        final json = _parseResponse(response);
+        return {
+          'ok': false,
+          'error': json['detail'] ?? 'Échec de chargement',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      print('❌ Error in getMyReviews: $e');
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Get review statistics (للعامل)
+  Future<Map<String, dynamic>> getReviewStats() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        endpoint: '$_baseUrl/tasks/review-stats/',
+      );
+
+      print('Review stats status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = _parseResponse(response);
+        final stats = ReviewStatisticsModel.fromJson(json);
+
+        print('✅ Stats loaded: ${stats.averageRating} / ${stats.totalReviews}');
+
+        return {
+          'ok': true,
+          'statistics': stats,
+          'json': json,
+        };
+      } else {
+        final json = _parseResponse(response);
+        return {
+          'ok': false,
+          'error': json['detail'] ?? 'Échec de chargement',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      print('❌ Error in getReviewStats: $e');
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  // ==================== HELPER METHODS ====================
   dynamic _parseResponse(http.Response response) {
     try {
       if (response.body.isEmpty) return {};

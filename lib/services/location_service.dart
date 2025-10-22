@@ -132,17 +132,20 @@ class LocationService {
     });
   }
 
-  void stopPeriodicTracking() {
-    if (!_isTracking) return;
+  void stopPeriodicTracking({bool silent = false}) {
+    if (!_isTracking) {
+      if (!silent) print('⚠️ Tracking already stopped');
+      return;
+    }
 
     _trackingTimer?.cancel();
     _trackingTimer = null;
     _isTracking = false;
 
-    // ✅ جديد: إيقاف Foreground Service
+    // إيقاف Foreground Service
     foregroundLocationService.stop();
 
-    print('🔴 Periodic tracking stopped');
+    if (!silent) print('🔴 Periodic tracking stopped');
   }
 
   Future<void> _saveLastLocation(LatLng location) async {
@@ -290,7 +293,8 @@ class LocationService {
   }
 
   void dispose() {
-    stopPeriodicTracking();
+    // استخدم silent=true لتجنب الرسائل المكررة
+    stopPeriodicTracking(silent: true);
   }
 }
 

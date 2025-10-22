@@ -16,6 +16,7 @@ class FavoriteWorker {
   final int timesHired;
   final double totalSpent;
   final String? notes;
+  final String phone;
 
   FavoriteWorker({
     required this.id,
@@ -34,6 +35,7 @@ class FavoriteWorker {
     required this.timesHired,
     required this.totalSpent,
     this.notes,
+    required this.phone,
   });
 
   factory FavoriteWorker.fromJson(Map<String, dynamic> json) {
@@ -57,6 +59,7 @@ class FavoriteWorker {
       timesHired: json['timesHired'] ?? 0,
       totalSpent: double.tryParse(json['totalSpent']?.toString() ?? '0') ?? 0.0,
       notes: json['notes'],
+      phone: json['phone'] ?? '',
     );
   }
 
@@ -78,6 +81,7 @@ class FavoriteWorker {
       'timesHired': timesHired,
       'totalSpent': totalSpent,
       'notes': notes,
+      'phone': phone,
     };
   }
 }

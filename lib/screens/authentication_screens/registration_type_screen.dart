@@ -4,7 +4,6 @@ import 'registration_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../routes/app_routes.dart';
 
-/// مؤشر صفحات خفيف بدون حزم خارجية
 class DotsIndicator extends StatelessWidget {
   final int count;
   final int activeIndex;

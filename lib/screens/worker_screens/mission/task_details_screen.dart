@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../constants/colors.dart';
 import '../../../models/models.dart';
+import '../../../models/payment_model.dart';
+import '../../../services/payment_service.dart';
 
-class TaskDetailsScreen extends StatelessWidget {
+class TaskDetailsScreen extends StatefulWidget {
   final TaskModel task;
   final String userRole; // 'worker' or 'client'
 
@@ -14,9 +16,69 @@ class TaskDetailsScreen extends StatelessWidget {
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  State<TaskDetailsScreen> createState() => _TaskDetailsScreenState();
+}
 
+class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
+  PaymentModel? _paymentData;
+  bool _isLoadingPayment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // جلب بيانات الدفع إذا كانت المهمة مكتملة
+    if (widget.task.status == TaskStatus.completed) {
+      _loadPaymentData();
+    }
+  }
+
+  Future<void> _loadPaymentData() async {
+    setState(() => _isLoadingPayment = true);
+
+    try {
+      final result = await paymentService.getMyPayments(limit: 100);
+
+      if (result['ok'] == true) {
+        final payments = result['payments'] as List<PaymentModel>;
+
+        // البحث عن الدفعة المرتبطة بهذه المهمة
+        final payment = payments.firstWhere(
+          (p) => p.taskTitle == widget.task.title,
+          orElse: () =>
+              payments.isNotEmpty ? payments.first : _createDummyPayment(),
+        );
+
+        setState(() {
+          _paymentData = payment;
+          _isLoadingPayment = false;
+        });
+
+        print(
+            '✅ Payment loaded: ${payment.payerName} → ${payment.receiverName}');
+      }
+    } catch (e) {
+      print('❌ Error loading payment: $e');
+      setState(() => _isLoadingPayment = false);
+    }
+  }
+
+  PaymentModel _createDummyPayment() {
+    return PaymentModel(
+      id: 0,
+      taskTitle: widget.task.title,
+      serviceType: widget.task.serviceType,
+      amount: widget.task.finalPrice ?? widget.task.budget.toDouble(),
+      paymentMethod: 'cash',
+      paymentMethodDisplay: 'Espèces',
+      status: 'completed',
+      payerName: 'Client',
+      receiverName: widget.task.assignedProvider ?? 'Prestataire',
+      createdAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -40,7 +102,6 @@ class TaskDetailsScreen extends StatelessWidget {
         child: Column(
           children: [
             _buildStatusBanner(context),
-            _buildTaskInfo(context),
             _buildTimeline(context),
             _buildOtherPartyInfo(context),
             _buildPaymentInfo(context),
@@ -51,73 +112,62 @@ class TaskDetailsScreen extends StatelessWidget {
     );
   }
 
-  // 🎨 بانر الحالة
   Widget _buildStatusBanner(BuildContext context) {
     Color statusColor;
     String statusText;
-    IconData statusIcon;
 
-    switch (task.status) {
+    switch (widget.task.status) {
       case TaskStatus.active:
-        if (task.workStartedAt != null) {
+        if (widget.task.workStartedAt != null) {
           statusColor = AppColors.cyan;
           statusText = 'En cours';
-          statusIcon = Icons.work_outline;
         } else {
           statusColor = Colors.orange;
           statusText = 'Acceptée';
-          statusIcon = Icons.handshake_outlined;
         }
         break;
       case TaskStatus.workCompleted:
         statusColor = AppColors.orange;
         statusText = 'En attente de confirmation';
-        statusIcon = Icons.pending_actions;
         break;
       case TaskStatus.completed:
         statusColor = AppColors.green;
-        statusText = 'Terminée et payée';
-        statusIcon = Icons.check_circle;
+        statusText = 'Terminée';
         break;
       case TaskStatus.cancelled:
         statusColor = Colors.red;
         statusText = 'Annulée';
-        statusIcon = Icons.cancel;
         break;
       default:
         statusColor = Colors.grey;
         statusText = 'Publiée';
-        statusIcon = Icons.publish;
     }
 
     return Container(
       margin: EdgeInsets.all(16),
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: statusColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor, width: 2),
+        border: Border.all(color: statusColor.withOpacity(0.3), width: 1.5),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(statusIcon, color: statusColor, size: 28),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              statusText,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: statusColor,
-              ),
+          Text(
+            statusText,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: statusColor,
             ),
           ),
-          if (task.isUrgent)
+          if (widget.task.isUrgent)
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.red,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 'URGENT',
@@ -133,82 +183,6 @@ class TaskDetailsScreen extends StatelessWidget {
     );
   }
 
-  // 📋 معلومات المهمة
-  Widget _buildTaskInfo(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.work_outline,
-                  color: AppColors.primaryPurple, size: 24),
-              SizedBox(width: 8),
-              Text(
-                'Informations',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          Divider(height: 24),
-          _buildInfoRow(Icons.title, 'Titre', task.title),
-          SizedBox(height: 12),
-          // _buildInfoRow(Icons.category, 'Service', task.serviceType),
-          SizedBox(height: 12),
-          _buildInfoRow(Icons.location_on, 'Localisation', task.location),
-          SizedBox(height: 12),
-          _buildInfoRow(Icons.schedule, 'Horaire préféré', task.preferredTime),
-          SizedBox(height: 12),
-          _buildInfoRow(Icons.attach_money, 'Budget', '${task.budget} MRU'),
-          // SizedBox(height: 16),
-          // Text(
-          //   'Description:',
-          //   style: TextStyle(
-          //     fontSize: 14,
-          //     fontWeight: FontWeight.w600,
-          //     color: AppColors.textSecondary,
-          //   ),
-          // ),
-          // SizedBox(height: 8),
-          // Container(
-          //   width: double.infinity,
-          //   padding: EdgeInsets.all(12),
-          //   decoration: BoxDecoration(
-          //     color: AppColors.lightGray.withOpacity(0.3),
-          //     borderRadius: BorderRadius.circular(8),
-          //   ),
-          //   child: Text(
-          //     task.description,
-          //     style: TextStyle(
-          //       fontSize: 14,
-          //       color: AppColors.textPrimary,
-          //       height: 1.5,
-          //     ),
-          //   ),
-          // ),
-        ],
-      ),
-    );
-  }
-
-  // ⏱️ الجدول الزمني
   Widget _buildTimeline(BuildContext context) {
     return Container(
       margin: EdgeInsets.all(16),
@@ -227,54 +201,27 @@ class TaskDetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.timeline, color: AppColors.primaryPurple, size: 24),
-              SizedBox(width: 8),
-              Text(
-                'Chronologie',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
+          Text(
+            'Chronologie',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
           ),
           Divider(height: 24),
-          _buildTimelineItem(
-            Icons.add_circle_outline,
-            'Créée',
-            _formatDateTime(task.createdAt),
-            true,
-          ),
-          if (task.status != TaskStatus.published)
+          if (widget.task.workStartedAt != null)
             _buildTimelineItem(
-              Icons.check_circle_outline,
-              'Acceptée',
-              task.createdAt != null ? 'Acceptée' : '-',
-              true,
-            ),
-          if (task.workStartedAt != null)
-            _buildTimelineItem(
-              Icons.play_circle_outline,
               'Commencée',
-              _formatDateTime(task.workStartedAt!),
+              _formatDateTime(widget.task.workStartedAt!),
               true,
             ),
-          if (task.status == TaskStatus.workCompleted ||
-              task.status == TaskStatus.completed)
+          if (widget.task.status == TaskStatus.completed)
             _buildTimelineItem(
-              Icons.assignment_turned_in_outlined,
-              'Travail terminé',
-              task.workStartedAt != null ? 'Terminée' : '-',
-              true,
-            ),
-          if (task.status == TaskStatus.completed)
-            _buildTimelineItem(
-              Icons.payment,
-              'Payée',
               'Confirmée',
+              _paymentData != null
+                  ? _formatDateTime(_paymentData!.createdAt)
+                  : 'Confirmée',
               true,
             ),
         ],
@@ -282,24 +229,17 @@ class TaskDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimelineItem(
-      IconData icon, String title, String time, bool isCompleted) {
+  Widget _buildTimelineItem(String title, String time, bool isCompleted) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
-            padding: EdgeInsets.all(8),
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
-              color: isCompleted
-                  ? AppColors.green.withOpacity(0.1)
-                  : AppColors.lightGray.withOpacity(0.3),
+              color: isCompleted ? AppColors.green : AppColors.lightGray,
               shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: isCompleted ? AppColors.green : AppColors.textSecondary,
-              size: 20,
             ),
           ),
           SizedBox(width: 12),
@@ -331,14 +271,15 @@ class TaskDetailsScreen extends StatelessWidget {
     );
   }
 
-  // 👤 معلومات الطرف الآخر
   Widget _buildOtherPartyInfo(BuildContext context) {
-    if (task.assignedProvider == null) return SizedBox.shrink();
+    // لا نعرض شيئاً إذا لم تكن المهمة مكتملة أو لا يوجد بيانات دفع
+    if (widget.task.status != TaskStatus.completed || _paymentData == null) {
+      return SizedBox.shrink();
+    }
 
-    final isWorkerView = userRole == 'worker';
-    final name = isWorkerView
-        ? 'Client' // ← مؤقتاً حتى نضيف clientName من Backend
-        : (task.assignedProvider ?? 'Non assigné');
+    final isWorkerView = widget.userRole == 'worker';
+    final name =
+        isWorkerView ? _paymentData!.payerName : _paymentData!.receiverName;
     final role = isWorkerView ? 'Client' : 'Prestataire';
 
     return Container(
@@ -358,102 +299,49 @@ class TaskDetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.person_outline,
-                  color: AppColors.primaryPurple, size: 24),
-              SizedBox(width: 8),
-              Text(
-                role,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
+          Text(
+            role,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
           ),
           Divider(height: 24),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: AppColors.primaryPurple.withOpacity(0.1),
-                child: Text(
-                  name[0].toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryPurple,
-                  ),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (!isWorkerView && task.providerRating != null) ...[
-                      SizedBox(height: 4),
-                      Row(
-                        children: [
-                          ...List.generate(5, (index) {
-                            return Icon(
-                              index < (task.providerRating ?? 0)
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              size: 16,
-                              color: Colors.amber,
-                            );
-                          }),
-                          SizedBox(width: 4),
-                          Text(
-                            '${task.providerRating}/5',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            name,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // 💰 معلومات الدفع
   Widget _buildPaymentInfo(BuildContext context) {
-    if (task.status != TaskStatus.completed &&
-        task.status != TaskStatus.workCompleted) {
+    if (widget.task.status != TaskStatus.completed &&
+        widget.task.status != TaskStatus.workCompleted) {
       return SizedBox.shrink();
     }
 
-    final isPaid = task.status == TaskStatus.completed;
+    final isPaid = widget.task.status == TaskStatus.completed;
 
-    // ✅ تأكد من عرض final_price الصحيح
-    final amountToDisplay = task.finalPrice != null && task.finalPrice! > 0
-        ? task.finalPrice
-        : task.budget;
+    // استخدام بيانات الدفع إذا كانت متاحة
+    final amountToDisplay = _paymentData?.amount ??
+        (widget.task.finalPrice ?? widget.task.budget.toDouble());
+
+    final initialBudget = widget.task.budget.toDouble();
+    final showBudgetDifference = amountToDisplay != initialBudget;
 
     print('════════ PAYMENT INFO DISPLAY ════════');
-    print('Final Price: ${task.finalPrice}');
-    print('Budget: ${task.budget}');
-    print('Amount to Display: $amountToDisplay');
-    print('Status: ${task.status}');
+    print('User Role: ${widget.userRole}');
+    print('Payment Data: ${_paymentData?.toString()}');
+    print('Amount to Display: $amountToDisplay MRU');
+    print('Initial Budget: $initialBudget MRU');
+    print('Status: ${widget.task.status}');
     print('═════════════════════════════════════');
 
     return Container(
@@ -472,25 +360,17 @@ class TaskDetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                isPaid ? Icons.check_circle : Icons.pending,
-                color: isPaid ? AppColors.green : AppColors.orange,
-                size: 24,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'État du paiement',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isPaid ? AppColors.green : AppColors.orange,
-                ),
-              ),
-            ],
+          Text(
+            'État du paiement',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isPaid ? AppColors.green : AppColors.orange,
+            ),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 16),
+
+          // المبلغ
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -505,20 +385,17 @@ class TaskDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '$amountToDisplay MRU', // ✅ عرض المبلغ الصحيح
+                    '${amountToDisplay.toStringAsFixed(0)} MRU',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  // ✅ عرض الفرق إذا كان هناك تعديل
-                  if (task.finalPrice != null &&
-                      task.finalPrice != task.budget &&
-                      task.finalPrice! > 0) ...[
+                  if (showBudgetDifference) ...[
                     SizedBox(height: 4),
                     Text(
-                      'Budget initial: ${task.budget} MRU',
+                      'Budget initial: ${initialBudget.toStringAsFixed(0)} MRU',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -530,7 +407,10 @@ class TaskDetailsScreen extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 8),
+
+          SizedBox(height: 12),
+
+          // الحالة
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -542,10 +422,10 @@ class TaskDetailsScreen extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: isPaid ? AppColors.green : AppColors.orange,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   isPaid ? '✓ Payé' : '⏳ En attente',
@@ -558,35 +438,58 @@ class TaskDetailsScreen extends StatelessWidget {
               ),
             ],
           ),
+
+          // طريقة الدفع (إذا كانت متاحة)
+          if (_paymentData != null && isPaid) ...[
+            SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Méthode:',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  _paymentData!.paymentMethodDisplay,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // تاريخ الدفع (إذا كان متاحاً)
+          if (_paymentData != null && isPaid) ...[
+            SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Date:',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  _formatDateTime(_paymentData!.createdAt),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: AppColors.textSecondary),
-        SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ],
     );
   }
 

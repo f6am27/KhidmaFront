@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/theme_colors.dart';
+import '../../core/theme/theme_colors.dart';
+import '../../models/payment_model.dart';
+import '../../models/user_model.dart';
+import '../../services/payment_service.dart';
+import '../../services/auth_api.dart';
 
 class PaymentHistoryScreen extends StatefulWidget {
   @override
@@ -7,6 +11,47 @@ class PaymentHistoryScreen extends StatefulWidget {
 }
 
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  late Future<Map<String, dynamic>> _paymentsFuture;
+  int _currentOffset = 0;
+  final int _limit = 20;
+  List<PaymentModel> _allPayments = [];
+  User? _currentUser;
+  final AuthApi _authApi = AuthApi();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUser();
+    _loadPayments();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final response = await _authApi.getUserProfile();
+      if (response['ok'] == true && response['json'] != null) {
+        setState(() {
+          _currentUser = User.fromJson(response['json']);
+        });
+      }
+    } catch (e) {
+      print('Error loading current user: $e');
+    }
+  }
+
+  void _loadPayments() {
+    _paymentsFuture = paymentService.getMyPayments(
+      limit: _limit,
+      offset: _currentOffset,
+    );
+  }
+
+  void _loadMore() {
+    setState(() {
+      _currentOffset += _limit;
+      _loadPayments();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -16,33 +61,121 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         title: Text('Historique des Paiements'),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Summary card
-          _buildSummaryCard(context, isDark),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _paymentsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildLoadingState();
+          }
 
-          // Payments list
-          Expanded(
-            child: _payments.isEmpty
-                ? _buildEmptyState(context, isDark)
-                : ListView.separated(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _payments.length,
-                    separatorBuilder: (context, index) => SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final payment = _payments[index];
-                      return _buildPaymentCard(payment, isDark);
-                    },
+          if (snapshot.hasError) {
+            return _buildErrorState(snapshot.error.toString(), isDark);
+          }
+
+          if (!snapshot.hasData || snapshot.data!['ok'] == false) {
+            return _buildErrorState('Échec du chargement des données', isDark);
+          }
+
+          final payments = snapshot.data!['payments'] as List<PaymentModel>;
+
+          if (payments.isEmpty) {
+            return _buildEmptyState(context, isDark);
+          }
+
+          _allPayments = payments;
+
+          return Column(
+            children: [
+              _buildSummaryCard(context, payments, isDark),
+              Expanded(
+                child: ListView.separated(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: payments.length + 1,
+                  separatorBuilder: (context, index) => SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    if (index == payments.length) {
+                      return Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: ElevatedButton(
+                            onPressed: _loadMore,
+                            child: Text('Charger plus'),
+                          ),
+                        ),
+                      );
+                    }
+                    return _buildPaymentCard(payments[index], isDark);
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Chargement en cours...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String errorMessage, bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Une erreur est survenue',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          SizedBox(height: 8),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              errorMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.white70 : Colors.grey[600],
                   ),
+            ),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _currentOffset = 0;
+                _loadPayments();
+              });
+            },
+            child: Text('Réessayer'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context, bool isDark) {
-    final totalPaid = _payments.fold<int>(0, (sum, p) => sum + p.amount);
-    final paymentsCount = _payments.length;
+  Widget _buildSummaryCard(
+      BuildContext context, List<PaymentModel> payments, bool isDark) {
+    final totalAmount = payments.fold<double>(
+      0,
+      (sum, p) => sum + p.amount,
+    );
+    final paymentsCount = payments.length;
 
     return Container(
       margin: EdgeInsets.all(16),
@@ -63,8 +196,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           Expanded(
             child: _buildSummaryItem(
               context,
-              'Total payé',
-              '$totalPaid MRU',
+              'Montant Total',
+              '${totalAmount.toStringAsFixed(0)} MRU',
               Icons.attach_money,
               isDark,
             ),
@@ -73,7 +206,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           Expanded(
             child: _buildSummaryItem(
               context,
-              'Nombre de paiements',
+              'Nombre d\'opérations',
               '$paymentsCount',
               Icons.receipt_long,
               isDark,
@@ -144,8 +277,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Icons.check_circle,
-                  color: ThemeColors.successColor,
+                  _getStatusIcon(payment.status),
+                  color: _getStatusColor(payment.status),
                   size: 24,
                 ),
               ),
@@ -155,7 +288,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      payment.serviceName,
+                      payment.taskTitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: isDark ? Colors.white : Colors.black,
@@ -170,7 +303,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        _getServiceTypeText(payment.serviceType),
+                        payment.serviceType,
                         style: TextStyle(
                           color: _getServiceTypeColor(payment.serviceType),
                           fontSize: 11,
@@ -185,17 +318,17 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${payment.amount} MRU',
+                    '${payment.amount.toStringAsFixed(0)} MRU',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: ThemeColors.successColor,
+                          color: _getStatusColor(payment.status),
                         ),
                   ),
                   SizedBox(height: 4),
                   Text(
-                    'Payé',
+                    _getStatusText(payment.status),
                     style: TextStyle(
-                      color: ThemeColors.successColor,
+                      color: _getStatusColor(payment.status),
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -206,7 +339,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           ),
           SizedBox(height: 16),
 
-          // Client info
+          // Client/Worker info
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -224,14 +357,14 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                 ),
                 SizedBox(width: 8),
                 Text(
-                  'Payé à: ',
+                  'Avec : ',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white54 : Colors.grey[600],
                       ),
                 ),
                 Expanded(
                   child: Text(
-                    payment.clientName,
+                    _getOtherPersonName(payment),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : Colors.black,
@@ -250,7 +383,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                 child: _buildDetailItem(
                   context,
                   Icons.calendar_today_outlined,
-                  _formatDateTime(payment.dateTime),
+                  _formatDateTime(payment.createdAt),
                   isDark,
                 ),
               ),
@@ -258,15 +391,17 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
               Expanded(
                 child: _buildDetailItem(
                   context,
-                  _getPaymentMethodIcon(payment.paymentMethod),
-                  payment.paymentMethod,
+                  _getPaymentMethodIcon(payment.paymentMethodDisplay),
+                  payment.paymentMethodDisplay,
                   isDark,
                 ),
               ),
             ],
           ),
 
-          if (payment.transactionId != null) ...[
+          // Transaction ID (only for non-cash payments)
+          if (payment.transactionId != null &&
+              payment.transactionId!.isNotEmpty) ...[
             SizedBox(height: 12),
             Container(
               padding: EdgeInsets.all(8),
@@ -285,18 +420,20 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   ),
                   SizedBox(width: 6),
                   Text(
-                    'ID Transaction: ',
+                    'N° Transaction : ',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: isDark ? Colors.white54 : Colors.grey[500],
                         ),
                   ),
-                  Text(
-                    payment.transactionId!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isDark ? Colors.white70 : Colors.grey[700],
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.w500,
-                        ),
+                  Expanded(
+                    child: Text(
+                      payment.transactionId!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: isDark ? Colors.white70 : Colors.grey[700],
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
                   ),
                 ],
               ),
@@ -342,14 +479,14 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           ),
           SizedBox(height: 16),
           Text(
-            'Aucun paiement effectué',
+            'Aucun paiement',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: isDark ? Colors.white70 : Colors.grey[600],
                 ),
           ),
           SizedBox(height: 8),
           Text(
-            'Vos paiements aux prestataires\napparaîtront ici',
+            'Vos paiements apparaîtront ici\nlorsque vous commencerez à utiliser l\'application',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: isDark ? Colors.white54 : Colors.grey[500],
@@ -360,31 +497,99 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     );
   }
 
-  Color _getServiceTypeColor(ServiceType type) {
-    switch (type) {
-      case ServiceType.direct:
+  Color _getServiceTypeColor(String type) {
+    // Vous pouvez personnaliser les couleurs selon le type de service
+    switch (type.toLowerCase()) {
+      case 'plomberie':
         return Colors.blue;
-      case ServiceType.fromTask:
+      case 'électricité':
+        return Colors.amber;
+      case 'jardinage':
+        return Colors.green;
+      case 'ménage':
         return Colors.purple;
+      case 'peinture':
+        return Colors.orange;
+      default:
+        return Colors.blue;
     }
   }
 
-  String _getServiceTypeText(ServiceType type) {
-    switch (type) {
-      case ServiceType.direct:
-        return 'Service direct';
-      case ServiceType.fromTask:
-        return 'Via une tâche';
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return ThemeColors.successColor;
+      case 'pending':
+        return Colors.orange;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return Icons.check_circle;
+      case 'pending':
+        return Icons.access_time;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.info;
+    }
+  }
+
+  String _getStatusText(String status) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'Complété';
+      case 'pending':
+        return 'En attente';
+      case 'cancelled':
+        return 'Annulé';
+      default:
+        return status;
+    }
+  }
+
+  String _getOtherPersonName(PaymentModel payment) {
+    // ✅ الحل الصحيح: عرض الشخص الآخر حسب دور المستخدم الحالي
+    if (_currentUser == null) {
+      // في حالة عدم وجود بيانات المستخدم، نعرض المتلقي افتراضياً
+      return payment.receiverName.isNotEmpty
+          ? payment.receiverName
+          : payment.payerName;
+    }
+
+    // إذا كان المستخدم الحالي هو العامل (worker) -> نعرض العميل (payer)
+    if (_currentUser!.isWorker) {
+      return payment.payerName.isNotEmpty ? payment.payerName : 'Client';
+    }
+
+    // إذا كان المستخدم الحالي هو العميل (client) -> نعرض العامل (receiver)
+    if (_currentUser!.isClient) {
+      return payment.receiverName.isNotEmpty
+          ? payment.receiverName
+          : 'Travailleur';
+    }
+
+    // الحالة الافتراضية
+    return payment.receiverName.isNotEmpty
+        ? payment.receiverName
+        : payment.payerName;
   }
 
   IconData _getPaymentMethodIcon(String method) {
     switch (method.toLowerCase()) {
+      case 'especes':
       case 'espèces':
         return Icons.money;
       case 'bankily':
         return Icons.account_balance_wallet;
       case 'sedad':
+      case 'sédad':
         return Icons.credit_card;
       default:
         return Icons.payment;
@@ -403,100 +608,13 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     } else if (difference.inDays < 7) {
       dateStr = "Il y a ${difference.inDays} jours";
     } else {
-      dateStr = "${dateTime.day}/${dateTime.month}/${dateTime.year}";
+      // Format français : jour/mois/année
+      dateStr =
+          "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}";
     }
 
     String timeStr =
         "${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
     return "$dateStr à $timeStr";
   }
-
-  // Sample data
-  final List<PaymentModel> _payments = [
-    PaymentModel(
-      id: '1',
-      serviceName: 'Nettoyage de maison',
-      clientName: 'Fatima Al-Zahra',
-      amount: 5000,
-      dateTime: DateTime.now().subtract(Duration(hours: 2)),
-      paymentMethod: 'Bankily',
-      serviceType: ServiceType.direct,
-      transactionId: 'BKL123456789',
-    ),
-    PaymentModel(
-      id: '2',
-      serviceName: 'Réparation plomberie',
-      clientName: 'Mohamed Ould Ahmed',
-      amount: 3500,
-      dateTime: DateTime.now().subtract(Duration(days: 1)),
-      paymentMethod: 'Espèces',
-      serviceType: ServiceType.fromTask,
-      transactionId: null,
-    ),
-    PaymentModel(
-      id: '3',
-      serviceName: 'Jardinage',
-      clientName: 'Omar Ba',
-      amount: 2800,
-      dateTime: DateTime.now().subtract(Duration(days: 3)),
-      paymentMethod: 'Sedad',
-      serviceType: ServiceType.direct,
-      transactionId: 'SDD987654321',
-    ),
-    PaymentModel(
-      id: '4',
-      serviceName: 'Garde d\'enfants',
-      clientName: 'Aicha Mint Salem',
-      amount: 4200,
-      dateTime: DateTime.now().subtract(Duration(days: 5)),
-      paymentMethod: 'Bankily',
-      serviceType: ServiceType.fromTask,
-      transactionId: 'BKL456789123',
-    ),
-    PaymentModel(
-      id: '5',
-      serviceName: 'Peinture salon',
-      clientName: 'Hassan Ould Baba',
-      amount: 7500,
-      dateTime: DateTime.now().subtract(Duration(days: 8)),
-      paymentMethod: 'Sedad',
-      serviceType: ServiceType.direct,
-      transactionId: 'SDD321654987',
-    ),
-    PaymentModel(
-      id: '6',
-      serviceName: 'Lavage auto',
-      clientName: 'Ahmed Ould Mohamed',
-      amount: 1500,
-      dateTime: DateTime.now().subtract(Duration(days: 12)),
-      paymentMethod: 'Espèces',
-      serviceType: ServiceType.direct,
-      transactionId: null,
-    ),
-  ];
-}
-
-// Models
-enum ServiceType { direct, fromTask }
-
-class PaymentModel {
-  final String id;
-  final String serviceName;
-  final String clientName;
-  final int amount;
-  final DateTime dateTime;
-  final String paymentMethod;
-  final ServiceType serviceType;
-  final String? transactionId;
-
-  PaymentModel({
-    required this.id,
-    required this.serviceName,
-    required this.clientName,
-    required this.amount,
-    required this.dateTime,
-    required this.paymentMethod,
-    required this.serviceType,
-    this.transactionId,
-  });
 }

@@ -151,4 +151,24 @@ class AuthApi {
       };
     }
   }
+
+  // — تغيير كلمة المرور — //
+  Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String newPasswordConfirm,
+  }) =>
+      _post(
+        '/change-password/',
+        {
+          'old_password': oldPassword,
+          'new_password': newPassword,
+          'new_password_confirm': newPasswordConfirm,
+        },
+        withAuth: true,
+      );
+
+  // — تسجيل الخروج — //
+  Future<Map<String, dynamic>> logout() =>
+      _post('/logout/', {}, withAuth: true);
 }

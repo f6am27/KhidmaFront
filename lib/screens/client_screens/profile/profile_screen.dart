@@ -11,7 +11,9 @@ import 'widgets/notification.dart';
 import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
 import 'widgets/favorite_providers.dart';
-import 'widgets/payment_history.dart';
+import '../../shared_screens/payment_history.dart';
+import '../../../services/auth_manager.dart';
+import '../../../routes/app_routes.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -89,6 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text('Mon Profile'),
         centerTitle: true,
         actions: [
@@ -719,12 +722,43 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _performLogout(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تم تسجيل الخروج بنجاح'),
-        backgroundColor: ThemeColors.primaryColor,
-      ),
-    );
+  Future<void> _performLogout(BuildContext context) async {
+    try {
+      // عرض مؤشر التحميل
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // تسجيل الخروج من Backend
+      await AuthManager.logoutWithBackend();
+
+      // إخفاء مؤشر التحميل
+      if (context.mounted) Navigator.of(context).pop();
+
+      // الانتقال لشاشة اختيار نوع المستخدم
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.registrationType,
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      // إخفاء مؤشر التحميل في حالة الخطأ
+      if (context.mounted) Navigator.of(context).pop();
+
+      // عرض رسالة خطأ
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la déconnexion: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

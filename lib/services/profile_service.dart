@@ -132,6 +132,8 @@ class ProfileService {
       );
 
       final json = _parseResponse(response);
+      print('🔍 DEBUG - profile_image: ${json['profile_image']}');
+      print('🔍 DEBUG - profile_image_url: ${json['profile_image_url']}');
 
       if (response.statusCode == 200) {
         final workerProfile = WorkerProfile.fromJson(json);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../services/auth_api.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({Key? key}) : super(key: key);
@@ -247,7 +248,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  void _handleChangePassword() {
+  Future<void> _handleChangePassword() async {
     // التحقق من صحة البيانات
     if (_currentPasswordController.text.isEmpty) {
       _showSnackBar('Veuillez saisir votre mot de passe actuel');
@@ -269,15 +270,49 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    // هنا يمكن إضافة منطق تغيير كلمة المرور
-    _showSnackBar('Mot de passe modifié avec succès', isSuccess: true);
+    // عرض مؤشر التحميل
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
 
-    // العودة للشاشة السابقة بعد ثانيتين
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.pop(context);
+    try {
+      // استدعاء الـ API
+      final authApi = AuthApi();
+      final result = await authApi.changePassword(
+        oldPassword: _currentPasswordController.text,
+        newPassword: _newPasswordController.text,
+        newPasswordConfirm: _confirmPasswordController.text,
+      );
+
+      // إخفاء مؤشر التحميل
+      if (mounted) Navigator.of(context).pop();
+
+      if (result['ok'] == true) {
+        _showSnackBar('Mot de passe modifié avec succès', isSuccess: true);
+
+        // العودة للشاشة السابقة بعد ثانيتين
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        });
+      } else {
+        // عرض رسالة الخطأ
+        final errorMsg = result['json']?['detail'] ??
+            result['json']?['old_password']?[0] ??
+            result['json']?['new_password']?[0] ??
+            'Erreur lors du changement du mot de passe';
+        _showSnackBar(errorMsg);
       }
-    });
+    } catch (e) {
+      // إخفاء مؤشر التحميل في حالة الخطأ
+      if (mounted) Navigator.of(context).pop();
+      _showSnackBar('Erreur de connexion: ${e.toString()}');
+    }
   }
 
   void _showSnackBar(String message, {bool isSuccess = false}) {

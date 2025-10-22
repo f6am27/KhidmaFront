@@ -11,7 +11,10 @@ import '../../shared_screens/settings/change_password.dart';
 import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
 import 'widgets/reviews_ratings.dart';
-import 'widgets/payment_history.dart';
+import '../../shared_screens/payment_history.dart';
+import '../../../core/config/api_config.dart';
+import '../../../services/auth_manager.dart';
+import '../../../routes/app_routes.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   @override
@@ -90,6 +93,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text('Mon Profile'),
         centerTitle: true,
         actions: [
@@ -198,13 +202,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   Widget _buildProfilePhoto() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // ✅ استخدم الدالة الجديدة
+    String imageUrl =
+        ApiConfig.getFullMediaUrl(_workerProfile?.profileImageUrl);
+
     return CircleAvatar(
       radius: 50,
       backgroundColor: isDark ? ThemeColors.darkSurface : Colors.grey[200],
-      backgroundImage: _workerProfile?.profileImageUrl != null
-          ? NetworkImage(_workerProfile!.profileImageUrl!)
-          : null,
-      child: _workerProfile?.profileImageUrl == null
+      backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+      child: imageUrl.isEmpty
           ? Icon(
               Icons.person,
               size: 60,
@@ -412,7 +418,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => WorkerPaymentHistoryScreen(),
+                  builder: (context) => PaymentHistoryScreen(),
                 ),
               );
             },
@@ -772,12 +778,43 @@ class WorkerSettingsScreen extends StatelessWidget {
     );
   }
 
-  void _performLogout(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تم تسجيل الخروج بنجاح'),
-        backgroundColor: ThemeColors.primaryColor,
-      ),
-    );
+  Future<void> _performLogout(BuildContext context) async {
+    try {
+      // عرض مؤشر التحميل
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // تسجيل الخروج من Backend
+      await AuthManager.logoutWithBackend();
+
+      // إخفاء مؤشر التحميل
+      if (context.mounted) Navigator.of(context).pop();
+
+      // الانتقال لشاشة اختيار نوع المستخدم
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.registrationType,
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      // إخفاء مؤشر التحميل في حالة الخطأ
+      if (context.mounted) Navigator.of(context).pop();
+
+      // عرض رسالة خطأ
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la déconnexion: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
