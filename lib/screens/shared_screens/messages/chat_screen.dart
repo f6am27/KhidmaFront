@@ -61,6 +61,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMessages({bool silent = false}) async {
+    if (!mounted) return;
     if (!silent) {
       setState(() {
         isLoading = true;
@@ -299,6 +300,226 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _showBlockDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: isDark ? ThemeColors.darkSurface : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Column(
+            children: [
+              Icon(
+                Icons.block,
+                color: Colors.orange,
+                size: 48,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Bloquer l\'utilisateur',
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: Text(
+            'Êtes-vous sûr de vouloir bloquer ${widget.contactName}?\n\nVous ne recevrez plus de messages de cette personne.',
+            style: TextStyle(
+              color: isDark ? Colors.white70 : Colors.grey[700],
+              fontSize: 15,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Annuler',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _blockUser();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Bloquer',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _blockUser() async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(
+          color: Colors.orange,
+        ),
+      ),
+    );
+
+    final result = await chatService.blockUser(widget.contactId);
+
+    // Close loading
+    Navigator.of(context).pop();
+
+    if (result['ok'] == true) {
+      // ✅ عرض رسالة النجاح
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDark ? ThemeColors.darkSurface : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 600),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Colors.orange,
+                          size: 50,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Utilisateur bloqué !',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  '${widget.contactName} a été bloqué avec succès. Vous ne recevrez plus de messages de cette personne.',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.grey[600],
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop(); // العودة لقائمة المحادثات
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'OK',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      Future.delayed(Duration(seconds: 3), () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
+        }
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Erreur: ${result['error']}'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -380,14 +601,54 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: _showReportDialog,
+          PopupMenuButton<String>(
             icon: Icon(
-              Icons.flag,
-              color: Colors.red,
-              size: 22,
+              Icons.more_vert,
+              color: isDark ? Colors.white : Colors.black,
             ),
-            tooltip: 'Signaler',
+            color: isDark ? ThemeColors.darkSurface : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            onSelected: (value) {
+              if (value == 'report') {
+                _showReportDialog();
+              } else if (value == 'block') {
+                _showBlockDialog();
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              PopupMenuItem<String>(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag, color: Colors.red, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Signaler',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block, color: Colors.orange, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Bloquer',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           SizedBox(width: 8),
         ],

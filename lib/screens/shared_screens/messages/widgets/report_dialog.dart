@@ -205,16 +205,12 @@ class ReportDialog extends StatelessWidget {
   }
 
   Future<void> _submitReport(BuildContext context, String reason) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     // Show loading
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => Center(
-        child: CircularProgressIndicator(
-          color: Colors.red,
-        ),
+        child: CircularProgressIndicator(),
       ),
     );
 
@@ -227,148 +223,21 @@ class ReportDialog extends StatelessWidget {
     // Close loading
     Navigator.of(context).pop();
 
-    if (result['ok'] == true) {
-      // ✅ عرض رسالة النجاح في منتصف الشاشة
-      _showSuccessDialog(context, isDark);
-    } else {
-      // ❌ عرض رسالة خطأ
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.white),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Erreur: ${result['error'] ?? 'Une erreur est survenue'}',
-                  style: TextStyle(fontSize: 15),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: Duration(seconds: 3),
+    // Show result
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result['ok']
+              ? 'Signalement envoyé avec succès'
+              : 'Erreur: ${result['error']}',
         ),
-      );
-    }
-  }
-
-  // ✅ رسالة النجاح في منتصف الشاشة
-  void _showSuccessDialog(BuildContext context, bool isDark) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: Container(
-          padding: EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? ThemeColors.darkSurface : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 20,
-                offset: Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ✅ أيقونة النجاح مع أنيميشن
-              TweenAnimationBuilder(
-                duration: Duration(milliseconds: 600),
-                tween: Tween<double>(begin: 0, end: 1),
-                builder: (context, double value, child) {
-                  return Transform.scale(
-                    scale: value,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 50,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              SizedBox(height: 24),
-
-              // العنوان
-              Text(
-                'Signalement envoyé !',
-                style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              SizedBox(height: 12),
-
-              // الوصف
-              Text(
-                'Votre signalement a été reçu avec succès. Notre équipe l\'examinera dans les plus brefs délais.',
-                style: TextStyle(
-                  color: isDark ? Colors.white70 : Colors.grey[600],
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              SizedBox(height: 24),
-
-              // زر OK
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Compris',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        backgroundColor: result['ok'] ? Colors.green : Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
+        duration: Duration(seconds: 3),
       ),
     );
-
-    // ✅ إغلاق تلقائي بعد 3 ثواني
-    Future.delayed(Duration(seconds: 3), () {
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-    });
   }
 }
