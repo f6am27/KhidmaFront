@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
+import '../../shared_screens/messages/chat_screen.dart';
+import '../../../../services/chat_service.dart';
 
 class TaskCandidatesScreen extends StatefulWidget {
   final TaskModel task;
@@ -516,13 +518,123 @@ class _TaskCandidatesScreenState extends State<TaskCandidatesScreen> {
     }
   }
 
-  void _contactCandidate(BuildContext context, TaskApplicationModel candidate) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Fonctionnalité de messagerie bientôt disponible'),
-        backgroundColor: ThemeColors.primaryColor,
+  Future<void> _contactCandidate(
+      BuildContext context, TaskApplicationModel candidate) async {
+    int candidateId;
+
+    try {
+      candidateId = int.parse(candidate.id);
+    } catch (e) {
+      print('❌ Error parsing candidate.id: ${candidate.id}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Erreur: ID du candidat invalide'),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+        ),
       ),
     );
+
+    try {
+      final result = await chatService.startConversation(candidateId);
+
+      // ✅ إغلاق Loading
+      if (mounted) Navigator.pop(context);
+
+      // ⏳ تأخير صغير لضمان اكتمال إغلاق Dialog
+      await Future.delayed(Duration(milliseconds: 100));
+
+      if (result['ok']) {
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                conversationId: result['conversation_id'],
+                contactName: candidate.name,
+                contactId: candidateId,
+                isOnline: candidate.isOnline,
+                profileImageUrl: candidate.profileImage,
+              ),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Erreur: ${result['error'] ?? 'Impossible de démarrer la conversation'}',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: EdgeInsets.all(16),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error starting conversation: $e');
+      if (mounted) Navigator.pop(context);
+
+      // ⏳ تأخير قبل إظهار الخطأ
+      await Future.delayed(Duration(milliseconds: 100));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Erreur de connexion. Veuillez réessayer.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
   }
 
   void _acceptCandidate(
@@ -566,6 +678,9 @@ class _TaskCandidatesScreenState extends State<TaskCandidatesScreen> {
 
     if (mounted) {
       Navigator.pop(context);
+
+      // ⏳ تأخير صغير
+      await Future.delayed(Duration(milliseconds: 100));
 
       if (result['ok']) {
         ScaffoldMessenger.of(context).showSnackBar(

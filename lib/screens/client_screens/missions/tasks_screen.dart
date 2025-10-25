@@ -882,95 +882,219 @@ class _TasksScreenState extends State<TasksScreen>
   void _confirmCashPayment(TaskModel task) {
     final priceController = TextEditingController(text: task.budget.toString());
 
+    // ✅ التحسين 1: حساب الحد الأقصى المسموح
+    final maxReasonableAmount = task.budget * 3;
+
     showDialog(
       context: context,
-      barrierDismissible: false, // منع الإغلاق بالنقر خارج الـ dialog
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: Text('تأكيد الدفع'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        title: Row(
           children: [
-            Icon(Icons.money, color: Colors.green, size: 48),
-            SizedBox(height: 16),
-            Text(
-              'هل قمت بدفع النقود نقداً للعامل؟',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15),
-            ),
-            SizedBox(height: 16),
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'المبلغ المدفوع (MRU)',
-                hintText: 'أدخل المبلغ النهائي',
-                prefixIcon: Icon(Icons.attach_money, color: Colors.green),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.green, width: 2),
-                ),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'الميزانية الأولية: ${task.budget} MRU',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontStyle: FontStyle.italic,
-              ),
-            ),
+            Icon(Icons.payment, color: Colors.green),
+            SizedBox(width: 8),
+            Text('تأكيد الدفع'),
           ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.money, color: Colors.green, size: 48),
+              SizedBox(height: 16),
+              Text(
+                'هل قمت بدفع النقود نقداً للعامل؟',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 20),
+
+              // ✅ التحسين 2: حقل إدخال محسّن مع Validation مباشر
+              TextField(
+                controller: priceController,
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'المبلغ المدفوع (MRU)',
+                  hintText: 'أدخل المبلغ النهائي',
+                  prefixIcon: Icon(Icons.attach_money, color: Colors.green),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.green, width: 2),
+                  ),
+                  // ✅ التحسين 3: رسالة مساعدة
+                  helperText:
+                      'الحد الأقصى المسموح: ${maxReasonableAmount.toStringAsFixed(0)} MRU',
+                  helperStyle: TextStyle(
+                    fontSize: 11,
+                    color: Colors.orange[700],
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+
+              // ✅ التحسين 4: عرض معلومات إضافية
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'الميزانية الأولية:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        Text(
+                          '${task.budget} MRU',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'الحد الأقصى:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                        Text(
+                          '${maxReasonableAmount.toStringAsFixed(0)} MRU',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () {
-              priceController.dispose(); // ✅ احذف عند الإلغاء
+              priceController.dispose();
               Navigator.pop(dialogContext);
             },
             child: Text('إلغاء'),
           ),
           ElevatedButton(
             onPressed: () async {
-              // ✅ اقرأ القيمة قبل أي شيء آخر
               final priceText = priceController.text.trim();
               final finalPrice = double.tryParse(priceText);
 
-              // ✅ احذف الـ controller فوراً
-              priceController.dispose();
-
-              // ✅ أغلق الـ dialog
-              Navigator.pop(dialogContext);
-
-              // ✅ ثم تحقق وأرسل
-              if (finalPrice == null || finalPrice <= 0) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('المبلغ غير صحيح'),
-                      backgroundColor: Colors.red,
-                      duration: Duration(seconds: 2),
+              // ✅ التحسين 5: Validation محسّن قبل الإرسال
+              if (finalPrice == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('يرجى إدخال رقم صحيح'),
+                      ],
                     ),
-                  );
-                }
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
                 return;
               }
 
-              // ✅ الآن نفذ العملية مع المبلغ الصحيح
+              if (finalPrice <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text('المبلغ يجب أن يكون أكبر من صفر'),
+                      ],
+                    ),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+
+              // ✅ التحسين 6: تحذير إذا تجاوز الحد الأقصى
+              if (finalPrice > maxReasonableAmount) {
+                final confirmHighAmount = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Row(
+                      children: [
+                        Icon(Icons.warning_amber, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('تحذير'),
+                      ],
+                    ),
+                    content: Text(
+                      'المبلغ المدخل (${finalPrice.toStringAsFixed(0)} MRU) أكبر من الحد الأقصى المسموح (${maxReasonableAmount.toStringAsFixed(0)} MRU).\n\nهل أنت متأكد من المبلغ؟',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('تعديل المبلغ'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                        ),
+                        child: Text(
+                          'متأكد، متابعة',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmHighAmount != true) {
+                  return; // المستخدم اختار تعديل المبلغ
+                }
+              }
+
+              // أغلق الـ dialog الأول
+              priceController.dispose();
+              Navigator.pop(dialogContext);
+
+              // نفذ العملية
               await _performConfirmCompletion(task, finalPrice);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
             ),
-            child: Text('تأكيد', style: TextStyle(color: Colors.white)),
+            child: Text('تأكيد الدفع', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     ).then((_) {
-      // ✅ إذا تم إغلاق الـ dialog بأي طريقة أخرى
       try {
         priceController.dispose();
       } catch (e) {
@@ -1036,8 +1160,30 @@ class _TasksScreenState extends State<TasksScreen>
         builder: (context) => Container(
           color: Colors.black54,
           child: Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+                ),
+                SizedBox(height: 16),
+                // ✅ التحسين 1: رسالة تحميل واضحة
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'جاري تأكيد الدفع...\n${finalPrice.toStringAsFixed(0)} MRU',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1046,14 +1192,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     try {
-      // ✅ تأكد أن finalPrice صحيح قبل الإرسال
+      // ✅ التحسين 2: Validation مزدوج (Frontend + Backend)
       if (finalPrice <= 0) {
         throw Exception('المبلغ يجب أن يكون أكبر من صفر');
       }
 
       final result = await taskService.confirmTaskCompletion(
         taskId: task.id,
-        finalPrice: finalPrice, // ✅ أرسل المبلغ الصحيح
+        finalPrice: finalPrice,
       );
 
       loadingOverlay?.remove();
@@ -1061,35 +1207,134 @@ class _TasksScreenState extends State<TasksScreen>
       if (!mounted) return;
 
       if (result['ok']) {
+        // ✅ التحسين 3: رسالة نجاح محسّنة مع تفاصيل
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('تم تأكيد المهمة. المبلغ: $finalPrice MRU'),
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'تم تأكيد المهمة بنجاح!',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'المبلغ المدفوع: ${finalPrice.toStringAsFixed(0)} MRU',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: EdgeInsets.all(16),
           ),
         );
+
         await _loadTasks();
         if (mounted) {
-          _tabController.animateTo(2);
+          _tabController.animateTo(2); // الانتقال لتبويب "المهام المكتملة"
         }
       } else {
+        // ✅ التحسين 4: معالجة أفضل للأخطاء من Backend
+        String errorMessage = result['error'] ?? 'خطأ في التأكيد';
+
+        // معالجة خاصة لأخطاء المبلغ
+        if (errorMessage.contains('too high')) {
+          errorMessage = 'المبلغ مرتفع جداً! يرجى التحقق والمحاولة مرة أخرى.';
+        } else if (errorMessage.contains('negative')) {
+          errorMessage = 'المبلغ لا يمكن أن يكون سالباً!';
+        } else if (errorMessage.contains('Payment creation failed')) {
+          errorMessage = 'فشل إنشاء سجل الدفع. يرجى المحاولة مرة أخرى.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['error'] ?? 'خطأ في التأكيد'),
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white, size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    errorMessage,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: EdgeInsets.all(16),
           ),
         );
       }
     } catch (e) {
       loadingOverlay?.remove();
       print('❌ Error in payment confirmation: $e');
+
       if (mounted) {
+        // ✅ التحسين 5: رسالة خطأ عامة محسّنة
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطأ: $e'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
+            content: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.white, size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'حدث خطأ!',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'يرجى المحاولة مرة أخرى أو الاتصال بالدعم',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: EdgeInsets.all(16),
+            action: SnackBarAction(
+              label: 'إعادة المحاولة',
+              textColor: Colors.white,
+              onPressed: () {
+                _confirmCashPayment(task);
+              },
+            ),
           ),
         );
       }
