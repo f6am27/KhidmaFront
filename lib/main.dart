@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 // الثيم والألوان
 import 'core/theme/theme_provider.dart';
 import 'core/theme/app_themes.dart';
+
+// استيراد Firebase Service
+import 'services/firebase_service.dart';
 
 // الشاشات
 import 'screens/authentication_screens/splash_screen.dart';
@@ -21,8 +25,21 @@ import 'screens/authentication_screens/registration_screen.dart';
 // import 'widgets/client_main_navigation.dart';
 import 'routes/app_routes.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ← جديد: تهيئة Firebase
+  try {
+    await Firebase.initializeApp();
+    print('✅ Firebase initialized successfully');
+
+    // ← جديد: تهيئة Firebase Messaging Service
+    await FirebaseService.initialize();
+    print('✅ Firebase Messaging initialized successfully');
+  } catch (e) {
+    print('❌ Firebase initialization error: $e');
+  }
+
   runApp(
     MultiProvider(
       providers: [

@@ -5,7 +5,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
 import '../../../services/profile_service.dart';
 import 'widgets/profile_edit.dart';
-import 'widgets/notification.dart';
+import '../../shared_screens/notifications/notifications_screen.dart';
 import '../../shared_screens/dialogs/logout_confirmation.dart';
 import '../../shared_screens/settings/change_password.dart';
 import '../../shared_screens/settings/language.dart';
@@ -612,7 +612,7 @@ class WorkerSettingsScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => NotificationScreen(),
+                    builder: (context) => NotificationsScreen(),
                   ),
                 );
               },

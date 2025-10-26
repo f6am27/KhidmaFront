@@ -881,8 +881,6 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _confirmCashPayment(TaskModel task) {
     final priceController = TextEditingController(text: task.budget.toString());
-
-    // ✅ التحسين 1: حساب الحد الأقصى المسموح
     final maxReasonableAmount = task.budget * 3;
 
     showDialog(
@@ -893,7 +891,7 @@ class _TasksScreenState extends State<TasksScreen>
           children: [
             Icon(Icons.payment, color: Colors.green),
             SizedBox(width: 8),
-            Text('تأكيد الدفع'),
+            Text('Confirmer le paiement'),
           ],
         ),
         content: SingleChildScrollView(
@@ -903,19 +901,17 @@ class _TasksScreenState extends State<TasksScreen>
               Icon(Icons.money, color: Colors.green, size: 48),
               SizedBox(height: 16),
               Text(
-                'هل قمت بدفع النقود نقداً للعامل؟',
+                'Avez-vous payé en espèces au prestataire ?',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               ),
               SizedBox(height: 20),
-
-              // ✅ التحسين 2: حقل إدخال محسّن مع Validation مباشر
               TextField(
                 controller: priceController,
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: 'المبلغ المدفوع (MRU)',
-                  hintText: 'أدخل المبلغ النهائي',
+                  labelText: 'Montant payé (MRU)',
+                  hintText: 'Entrez le montant final',
                   prefixIcon: Icon(Icons.attach_money, color: Colors.green),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -924,9 +920,8 @@ class _TasksScreenState extends State<TasksScreen>
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Colors.green, width: 2),
                   ),
-                  // ✅ التحسين 3: رسالة مساعدة
                   helperText:
-                      'الحد الأقصى المسموح: ${maxReasonableAmount.toStringAsFixed(0)} MRU',
+                      'Maximum autorisé : ${maxReasonableAmount.toStringAsFixed(0)} MRU',
                   helperStyle: TextStyle(
                     fontSize: 11,
                     color: Colors.orange[700],
@@ -934,8 +929,6 @@ class _TasksScreenState extends State<TasksScreen>
                 ),
               ),
               SizedBox(height: 8),
-
-              // ✅ التحسين 4: عرض معلومات إضافية
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -949,7 +942,7 @@ class _TasksScreenState extends State<TasksScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'الميزانية الأولية:',
+                          'Budget initial :',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[700],
@@ -970,7 +963,7 @@ class _TasksScreenState extends State<TasksScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'الحد الأقصى:',
+                          'Maximum autorisé :',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.orange[700],
@@ -998,14 +991,13 @@ class _TasksScreenState extends State<TasksScreen>
               priceController.dispose();
               Navigator.pop(dialogContext);
             },
-            child: Text('إلغاء'),
+            child: Text('Annuler'),
           ),
           ElevatedButton(
             onPressed: () async {
               final priceText = priceController.text.trim();
               final finalPrice = double.tryParse(priceText);
 
-              // ✅ التحسين 5: Validation محسّن قبل الإرسال
               if (finalPrice == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -1013,7 +1005,7 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Icon(Icons.error_outline, color: Colors.white),
                         SizedBox(width: 8),
-                        Text('يرجى إدخال رقم صحيح'),
+                        Text('Veuillez entrer un nombre valide'),
                       ],
                     ),
                     backgroundColor: Colors.red,
@@ -1030,7 +1022,7 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Icon(Icons.error_outline, color: Colors.white),
                         SizedBox(width: 8),
-                        Text('المبلغ يجب أن يكون أكبر من صفر'),
+                        Text('Le montant doit être supérieur à zéro'),
                       ],
                     ),
                     backgroundColor: Colors.red,
@@ -1040,7 +1032,6 @@ class _TasksScreenState extends State<TasksScreen>
                 return;
               }
 
-              // ✅ التحسين 6: تحذير إذا تجاوز الحد الأقصى
               if (finalPrice > maxReasonableAmount) {
                 final confirmHighAmount = await showDialog<bool>(
                   context: context,
@@ -1049,17 +1040,17 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Icon(Icons.warning_amber, color: Colors.orange),
                         SizedBox(width: 8),
-                        Text('تحذير'),
+                        Text('Attention'),
                       ],
                     ),
                     content: Text(
-                      'المبلغ المدخل (${finalPrice.toStringAsFixed(0)} MRU) أكبر من الحد الأقصى المسموح (${maxReasonableAmount.toStringAsFixed(0)} MRU).\n\nهل أنت متأكد من المبلغ؟',
+                      'Le montant saisi (${finalPrice.toStringAsFixed(0)} MRU) dépasse le maximum autorisé (${maxReasonableAmount.toStringAsFixed(0)} MRU).\n\nÊtes-vous sûr du montant ?',
                       style: TextStyle(fontSize: 14),
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: Text('تعديل المبلغ'),
+                        child: Text('Modifier le montant'),
                       ),
                       ElevatedButton(
                         onPressed: () => Navigator.pop(ctx, true),
@@ -1067,7 +1058,7 @@ class _TasksScreenState extends State<TasksScreen>
                           backgroundColor: Colors.orange,
                         ),
                         child: Text(
-                          'متأكد، متابعة',
+                          'Confirmer',
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
@@ -1076,21 +1067,23 @@ class _TasksScreenState extends State<TasksScreen>
                 );
 
                 if (confirmHighAmount != true) {
-                  return; // المستخدم اختار تعديل المبلغ
+                  return;
                 }
               }
 
-              // أغلق الـ dialog الأول
               priceController.dispose();
               Navigator.pop(dialogContext);
 
-              // نفذ العملية
+              // ⏳ التأخير لحل مشكلة الشاشة الحمراء
+              await Future.delayed(Duration(milliseconds: 100));
+
               await _performConfirmCompletion(task, finalPrice);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
             ),
-            child: Text('تأكيد الدفع', style: TextStyle(color: Colors.white)),
+            child: Text('Confirmer le paiement',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1167,7 +1160,6 @@ class _TasksScreenState extends State<TasksScreen>
                   valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
                 ),
                 SizedBox(height: 16),
-                // ✅ التحسين 1: رسالة تحميل واضحة
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
@@ -1175,7 +1167,7 @@ class _TasksScreenState extends State<TasksScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'جاري تأكيد الدفع...\n${finalPrice.toStringAsFixed(0)} MRU',
+                    'Confirmation du paiement...\n${finalPrice.toStringAsFixed(0)} MRU',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -1192,9 +1184,8 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     try {
-      // ✅ التحسين 2: Validation مزدوج (Frontend + Backend)
       if (finalPrice <= 0) {
-        throw Exception('المبلغ يجب أن يكون أكبر من صفر');
+        throw Exception('Le montant doit être supérieur à zéro');
       }
 
       final result = await taskService.confirmTaskCompletion(
@@ -1204,10 +1195,12 @@ class _TasksScreenState extends State<TasksScreen>
 
       loadingOverlay?.remove();
 
+      // ⏳ التأخير بعد إزالة Loading
+      await Future.delayed(Duration(milliseconds: 100));
+
       if (!mounted) return;
 
       if (result['ok']) {
-        // ✅ التحسين 3: رسالة نجاح محسّنة مع تفاصيل
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -1220,7 +1213,7 @@ class _TasksScreenState extends State<TasksScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'تم تأكيد المهمة بنجاح!',
+                        'Tâche confirmée avec succès !',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -1228,7 +1221,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'المبلغ المدفوع: ${finalPrice.toStringAsFixed(0)} MRU',
+                        'Montant payé : ${finalPrice.toStringAsFixed(0)} MRU',
                         style: TextStyle(fontSize: 13),
                       ),
                     ],
@@ -1248,19 +1241,20 @@ class _TasksScreenState extends State<TasksScreen>
 
         await _loadTasks();
         if (mounted) {
-          _tabController.animateTo(2); // الانتقال لتبويب "المهام المكتملة"
+          _tabController.animateTo(2);
         }
       } else {
-        // ✅ التحسين 4: معالجة أفضل للأخطاء من Backend
-        String errorMessage = result['error'] ?? 'خطأ في التأكيد';
+        String errorMessage =
+            result['error'] ?? 'Erreur lors de la confirmation';
 
-        // معالجة خاصة لأخطاء المبلغ
         if (errorMessage.contains('too high')) {
-          errorMessage = 'المبلغ مرتفع جداً! يرجى التحقق والمحاولة مرة أخرى.';
+          errorMessage =
+              'Le montant est trop élevé ! Veuillez vérifier et réessayer.';
         } else if (errorMessage.contains('negative')) {
-          errorMessage = 'المبلغ لا يمكن أن يكون سالباً!';
+          errorMessage = 'Le montant ne peut pas être négatif !';
         } else if (errorMessage.contains('Payment creation failed')) {
-          errorMessage = 'فشل إنشاء سجل الدفع. يرجى المحاولة مرة أخرى.';
+          errorMessage =
+              'Échec de la création du paiement. Veuillez réessayer.';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1289,10 +1283,10 @@ class _TasksScreenState extends State<TasksScreen>
       }
     } catch (e) {
       loadingOverlay?.remove();
+      await Future.delayed(Duration(milliseconds: 100));
       print('❌ Error in payment confirmation: $e');
 
       if (mounted) {
-        // ✅ التحسين 5: رسالة خطأ عامة محسّنة
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -1305,7 +1299,7 @@ class _TasksScreenState extends State<TasksScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'حدث خطأ!',
+                        'Une erreur est survenue !',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -1313,7 +1307,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'يرجى المحاولة مرة أخرى أو الاتصال بالدعم',
+                        'Veuillez réessayer ou contacter le support',
                         style: TextStyle(fontSize: 13),
                       ),
                     ],
@@ -1329,7 +1323,7 @@ class _TasksScreenState extends State<TasksScreen>
             ),
             margin: EdgeInsets.all(16),
             action: SnackBarAction(
-              label: 'إعادة المحاولة',
+              label: 'Réessayer',
               textColor: Colors.white,
               onPressed: () {
                 _confirmCashPayment(task);
