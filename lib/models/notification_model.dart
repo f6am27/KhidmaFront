@@ -51,7 +51,7 @@ class NotificationModel {
       createdAt: json['created_at'] as String,
       updatedAt: json['updated_at'] as String?,
       timeAgo: json['time_ago'] as String?,
-      recipientRole: json['recipient_role'] as String,
+      recipientRole: json['recipient_role'] as String? ?? 'client',
       taskTitle: json['task_title'] as String?,
       taskId: json['task_id'] as int?,
       relatedPersonName: null, // سنملأها من الواجهة حسب الحاجة
