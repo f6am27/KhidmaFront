@@ -383,22 +383,34 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   Widget _buildPhoneField() {
+    final isDark = Theme.of(context).brightness == Brightness.dark; // ✅ أضف هذا
+
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
       style: Theme.of(context).textTheme.bodyLarge,
       readOnly: true,
       decoration: InputDecoration(
-        suffixIcon: Icon(Icons.lock_outline, color: Colors.grey, size: 20),
+        suffixIcon: Icon(
+          Icons.lock_outline,
+          color: isDark ? ThemeColors.darkTextSecondary : Colors.grey,
+          size: 20,
+        ),
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: isDark
+            ? ThemeColors.darkSurface.withOpacity(0.5)
+            : Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: isDark ? ThemeColors.darkBorder : Colors.grey[300]!,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: isDark ? ThemeColors.darkBorder : Colors.grey[300]!,
+          ),
         ),
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
@@ -408,6 +420,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Widget _buildGenderDropdown(bool isDark) {
     return DropdownButtonFormField<String>(
       value: _selectedGender,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            // ✅ أضف هذا
+            color: isDark ? Colors.white : Colors.black,
+          ),
+      dropdownColor:
+          isDark ? ThemeColors.darkCardBackground : Colors.white, // ✅ أضف هذا
       decoration: InputDecoration(
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
@@ -423,11 +441,34 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             color: isDark ? ThemeColors.darkBorder : ThemeColors.lightBorder,
           ),
         ),
+        focusedBorder: OutlineInputBorder(
+          // ✅ أضف هذا للتناسق
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: ThemeColors.primaryColor, width: 2),
+        ),
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       items: [
-        DropdownMenuItem(value: 'male', child: Text('Homme')),
-        DropdownMenuItem(value: 'female', child: Text('Femme')),
+        DropdownMenuItem(
+          value: 'male',
+          child: Text(
+            'Homme',
+            style: TextStyle(
+              // ✅ أضف هذا
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
+        DropdownMenuItem(
+          value: 'female',
+          child: Text(
+            'Femme',
+            style: TextStyle(
+              // ✅ أضف هذا
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+        ),
       ],
       onChanged: (value) => setState(() => _selectedGender = value),
     );
@@ -436,6 +477,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Widget _buildAreaDropdown(bool isDark) {
     return DropdownButtonFormField<String>(
       value: _selectedAreaName,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            // ✅ أضف هذا
+            color: isDark ? Colors.white : Colors.black,
+          ),
+      dropdownColor: isDark ? ThemeColors.darkCardBackground : Colors.white,
       decoration: InputDecoration(
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
@@ -451,13 +497,30 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             color: isDark ? ThemeColors.darkBorder : ThemeColors.lightBorder,
           ),
         ),
+        focusedBorder: OutlineInputBorder(
+          // ✅ أضف هذا للتناسق
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: ThemeColors.primaryColor, width: 2),
+        ),
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
-      hint: Text('Sélectionner une zone'),
+      hint: Text(
+        'Sélectionner une zone',
+        style: TextStyle(
+          // ✅ أضف هذا
+          color: isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+        ),
+      ),
       items: _areas
           .map((area) => DropdownMenuItem(
                 value: area.name,
-                child: Text(area.name),
+                child: Text(
+                  area.name,
+                  style: TextStyle(
+                    // ✅ أضف هذا
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
               ))
           .toList(),
       onChanged: (value) => setState(() => _selectedAreaName = value),

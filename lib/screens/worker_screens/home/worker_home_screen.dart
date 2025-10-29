@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'worker_opportunities_screen.dart';
 import '../../../services/auth_manager.dart';
 import '../../../core/config/api_config.dart';
+import '../../../core/theme/theme_colors.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -116,16 +117,23 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.center,
-            colors: [
-              AppColors.primaryPurple,
-              AppColors.primaryPurple.withOpacity(0.8),
-              AppColors.background,
-            ],
+            colors: Theme.of(context).brightness == Brightness.dark
+                ? [
+                    ThemeColors.primaryColor,
+                    ThemeColors.primaryColor.withOpacity(0.8),
+                    ThemeColors.darkBackground,
+                  ]
+                : [
+                    ThemeColors.primaryColor,
+                    ThemeColors.primaryColor.withOpacity(0.8),
+                    ThemeColors.lightBackground,
+                  ],
             stops: const [0.0, 0.3, 0.6],
           ),
         ),
@@ -136,7 +144,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: Theme.of(context).scaffoldBackgroundColor,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(30),
                       topRight: Radius.circular(30),
@@ -405,7 +413,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
           ),
         ),
         const SizedBox(height: 16),
@@ -448,7 +458,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? ThemeColors.darkCardBackground
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(0.2), width: 1),
           boxShadow: [
@@ -475,7 +487,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextPrimary
+                    : ThemeColors.lightTextPrimary,
               ),
             ),
             const SizedBox(height: 4),
@@ -483,7 +497,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               subtitle,
               style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textSecondary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextSecondary
+                    : ThemeColors.lightTextSecondary,
               ),
             ),
           ],
@@ -504,7 +520,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextPrimary
+                    : ThemeColors.lightTextPrimary,
               ),
             ),
             TextButton(
@@ -573,7 +591,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ThemeColors.darkCardBackground
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: isUrgent
             ? Border.all(color: AppColors.orange.withOpacity(0.3), width: 1)
@@ -629,9 +649,11 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                     Text(
                       task.title,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? ThemeColors.darkTextPrimary
+                            : ThemeColors.lightTextPrimary,
                       ),
                     ),
                   ],
@@ -666,8 +688,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               Text(
                 task.location,
                 style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
               const Spacer(),
@@ -675,7 +699,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                 task.preferredTime,
                 style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
             ],
@@ -708,7 +734,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.lightGray,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? ThemeColors.darkCardBackground.withOpacity(0.5)
+                          : Colors.grey[100]!,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -783,7 +811,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                 margin: const EdgeInsets.symmetric(horizontal: 8),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkCardBackground
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -806,9 +836,12 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                           child: Text(
                             'Postuler pour la mission',
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? ThemeColors.darkTextPrimary
+                                  : ThemeColors.lightTextPrimary,
                             ),
                           ),
                         ),
@@ -1070,7 +1103,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? ThemeColors.darkCardBackground
+              : Colors.white,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
@@ -1087,9 +1122,11 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                 Text(
                   'Trier les missions',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                   ),
                 ),
                 IconButton(
@@ -1179,7 +1216,9 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.lightGray,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? ThemeColors.darkCardBackground.withOpacity(0.5)
+              : Colors.grey[100]!,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -1202,15 +1241,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? ThemeColors.darkTextPrimary
+                          : ThemeColors.lightTextPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? ThemeColors.darkTextSecondary
+                          : ThemeColors.lightTextSecondary,
                     ),
                   ),
                 ],

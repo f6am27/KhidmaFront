@@ -779,18 +779,22 @@ class _WorkerProfileEditScreenState extends State<WorkerProfileEditScreen> {
   }
 
   Widget _buildPhoneField() {
+    final isDark = Theme.of(context).brightness == Brightness.dark; // ✅ أضف هذا
+
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
       style: Theme.of(context).textTheme.bodyLarge,
-      readOnly: true, // Phone cannot be changed
+      readOnly: true,
       decoration: _buildInputDecoration().copyWith(
         suffixIcon: Icon(
           Icons.lock_outline,
-          color: Colors.grey,
+          color: isDark ? ThemeColors.darkTextSecondary : Colors.grey,
           size: 20,
         ),
-        fillColor: Colors.grey[100],
+        fillColor: isDark
+            ? ThemeColors.darkSurface.withOpacity(0.5)
+            : Colors.grey[100],
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../../../services/category_service.dart';
 import '../../../services/location_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../services/profile_service.dart';
+import '../../../core/theme/theme_colors.dart';
 
 class WorkerOpportunitiesScreen extends StatefulWidget {
   final String filterType; // 'category', 'distance', 'price', 'region'
@@ -152,24 +153,36 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           _getScreenTitle(),
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.tune, color: AppColors.primaryPurple),
+            icon: Icon(
+              Icons.tune,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
+            ),
             onPressed: _showAdvancedFilters,
           ),
         ],
@@ -279,10 +292,18 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primaryPurple : AppColors.cardBackground,
+          color: isActive
+              ? AppColors.primaryPurple
+              : Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkCardBackground
+                  : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive ? AppColors.primaryPurple : AppColors.lightGray,
+            color: isActive
+                ? AppColors.primaryPurple
+                : Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkCardBackground.withOpacity(0.5)
+                    : Colors.grey[100]!,
           ),
         ),
         child: Row(
@@ -292,14 +313,22 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               Icon(
                 icon,
                 size: 16,
-                color: isActive ? Colors.white : AppColors.textSecondary,
+                color: isActive
+                    ? Colors.white
+                    : Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
               ),
               const SizedBox(width: 6),
             ],
             Text(
               label,
               style: TextStyle(
-                color: isActive ? Colors.white : AppColors.textPrimary,
+                color: isActive
+                    ? Colors.white
+                    : Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
@@ -325,24 +354,31 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         return areaNames.map((areaName) {
           return PopupMenuItem<String>(
             value: areaName,
-            child: Row(
-              children: [
-                if (selectedArea == areaName) ...[
-                  Icon(Icons.check, size: 16, color: AppColors.primaryPurple),
-                  const SizedBox(width: 8),
-                ],
-                Text(
-                  areaName,
-                  style: TextStyle(
-                    color: selectedArea == areaName
-                        ? AppColors.primaryPurple
-                        : AppColors.textPrimary,
-                    fontWeight: selectedArea == areaName
-                        ? FontWeight.w600
-                        : FontWeight.normal,
+            child: Container(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkCardBackground
+                  : Colors.white,
+              child: Row(
+                children: [
+                  if (selectedArea == areaName) ...[
+                    Icon(Icons.check, size: 16, color: AppColors.primaryPurple),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    areaName,
+                    style: TextStyle(
+                      color: selectedArea == areaName
+                          ? AppColors.primaryPurple
+                          : Theme.of(context).brightness == Brightness.dark
+                              ? ThemeColors.darkTextPrimary
+                              : ThemeColors.lightTextPrimary,
+                      fontWeight: selectedArea == areaName
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }).toList();
@@ -352,12 +388,16 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         decoration: BoxDecoration(
           color: selectedArea != 'Toutes Zones'
               ? AppColors.primaryPurple
-              : AppColors.cardBackground,
+              : Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkCardBackground
+                  : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selectedArea != 'Toutes Zones'
                 ? AppColors.primaryPurple
-                : AppColors.lightGray,
+                : Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkCardBackground.withOpacity(0.5)
+                    : Colors.grey[100]!,
           ),
         ),
         child: Row(
@@ -368,7 +408,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               size: 16,
               color: selectedArea != 'Toutes Zones'
                   ? Colors.white
-                  : AppColors.textSecondary,
+                  : Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
             ),
             const SizedBox(width: 6),
             Text(
@@ -376,7 +418,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               style: TextStyle(
                 color: selectedArea != 'Toutes Zones'
                     ? Colors.white
-                    : AppColors.textPrimary,
+                    : Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
@@ -387,7 +431,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               size: 16,
               color: selectedArea != 'Toutes Zones'
                   ? Colors.white
-                  : AppColors.textSecondary,
+                  : Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
             ),
           ],
         ),
@@ -406,7 +452,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
             ),
           ),
           if (selectedSortType != 'none' || selectedArea != 'Toutes Zones')
@@ -446,7 +494,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextPrimary
+                    : ThemeColors.lightTextPrimary,
               ),
             ),
             SizedBox(height: 8),
@@ -478,7 +528,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ThemeColors.darkCardBackground
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: isUrgent
             ? Border.all(color: AppColors.orange.withOpacity(0.3), width: 1)
@@ -536,7 +588,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? ThemeColors.darkTextPrimary
+                            : ThemeColors.lightTextPrimary,
                       ),
                     ),
                   ],
@@ -575,14 +629,18 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               Icon(
                 Icons.location_on_outlined,
                 size: 16,
-                color: AppColors.textSecondary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextSecondary
+                    : ThemeColors.lightTextSecondary,
               ),
               const SizedBox(width: 4),
               Text(
                 task.location,
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
               const Spacer(),
@@ -590,7 +648,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 task.preferredTime,
                 style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
             ],
@@ -623,7 +683,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.lightGray,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? ThemeColors.darkCardBackground.withOpacity(0.5)
+                          : Colors.grey[100]!,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -708,7 +770,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             'Aucune opportunité trouvée',
             style: TextStyle(
               fontSize: 16,
-              color: AppColors.textSecondary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextSecondary
+                  : ThemeColors.lightTextSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -716,7 +780,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             'Essayez de modifier vos filtres',
             style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextSecondary
+                  : ThemeColors.lightTextSecondary,
             ),
           ),
         ],
@@ -732,7 +798,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.6,
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? ThemeColors.darkCardBackground
+              : Colors.white,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
@@ -750,7 +818,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                   ),
                 ),
                 IconButton(
@@ -765,7 +835,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextPrimary
+                    : ThemeColors.lightTextPrimary,
               ),
             ),
             const SizedBox(height: 12),
@@ -816,7 +888,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primaryPurple.withOpacity(0.1)
-              : AppColors.lightGray,
+              : Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkCardBackground.withOpacity(0.5)
+                  : Colors.grey[100]!,
           borderRadius: BorderRadius.circular(12),
           border:
               isSelected ? Border.all(color: AppColors.primaryPurple) : null,
@@ -838,7 +912,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color: isSelected
                     ? AppColors.primaryPurple
-                    : AppColors.textPrimary,
+                    : Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
               ),
             ),
           ],
@@ -866,7 +942,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 8),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkCardBackground
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
@@ -891,7 +969,10 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? ThemeColors.darkTextPrimary
+                                  : ThemeColors.lightTextPrimary,
                             ),
                           ),
                         ),
@@ -1037,7 +1118,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               'Position obsolète. Activez votre position pour des distances précises.',
               style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textPrimary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextPrimary
+                    : ThemeColors.lightTextPrimary,
               ),
             ),
           ),

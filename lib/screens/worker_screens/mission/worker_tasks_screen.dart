@@ -3,6 +3,7 @@ import '../../../constants/colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
 import 'task_details_screen.dart';
+import '../../../core/theme/theme_colors.dart';
 
 class WorkerTasksScreen extends StatefulWidget {
   @override
@@ -84,14 +85,16 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         title: Text(
           'Mes Tâches',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -102,7 +105,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
           controller: _tabController,
           indicatorColor: AppColors.primaryPurple,
           labelColor: AppColors.primaryPurple,
-          unselectedLabelColor: AppColors.textSecondary,
+          unselectedLabelColor: Theme.of(context).brightness == Brightness.dark
+              ? ThemeColors.darkTextSecondary
+              : ThemeColors.lightTextSecondary,
           labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500),
           isScrollable: true,
@@ -198,7 +203,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ThemeColors.darkCardBackground
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -235,7 +242,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? ThemeColors.darkTextPrimary
+                            : ThemeColors.lightTextPrimary,
                       ),
                     ),
                     SizedBox(height: 4),
@@ -279,7 +288,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
             task.description,
             style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextSecondary
+                  : ThemeColors.lightTextSecondary,
               height: 1.4,
             ),
             maxLines: 2,
@@ -441,7 +452,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
             child: Text(
               'Tâche annulée',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? ThemeColors.darkTextSecondary
+                    : ThemeColors.lightTextSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -492,7 +505,9 @@ class _WorkerTasksScreenState extends State<WorkerTasksScreen>
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
             ),
           ),
           SizedBox(height: 8),

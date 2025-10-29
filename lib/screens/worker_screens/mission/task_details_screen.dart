@@ -4,6 +4,7 @@ import '../../../constants/colors.dart';
 import '../../../models/models.dart';
 import '../../../models/payment_model.dart';
 import '../../../services/payment_service.dart';
+import '../../../core/theme/theme_colors.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final TaskModel task;
@@ -80,18 +81,25 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Détails de la tâche',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? ThemeColors.darkTextPrimary
+                : ThemeColors.lightTextPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -188,7 +196,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       margin: EdgeInsets.all(16),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ThemeColors.darkCardBackground
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -206,7 +216,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
             ),
           ),
           Divider(height: 24),
@@ -252,7 +264,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                   ),
                 ),
                 SizedBox(height: 2),
@@ -260,7 +274,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   time,
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
                   ),
                 ),
               ],
@@ -286,7 +302,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       margin: EdgeInsets.symmetric(horizontal: 16),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? ThemeColors.darkCardBackground
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -304,7 +322,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
             ),
           ),
           Divider(height: 24),
@@ -313,7 +333,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
             ),
           ),
         ],
@@ -378,7 +400,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 'Montant:',
                 style: TextStyle(
                   fontSize: 15,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
               Column(
@@ -389,7 +413,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? ThemeColors.darkTextPrimary
+                          : ThemeColors.lightTextPrimary,
                     ),
                   ),
                   if (showBudgetDifference) ...[
@@ -398,7 +424,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                       'Budget initial: ${initialBudget.toStringAsFixed(0)} MRU',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? ThemeColors.darkTextSecondary
+                            : ThemeColors.lightTextSecondary,
                         decoration: TextDecoration.lineThrough,
                       ),
                     ),
@@ -418,7 +446,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 'Statut:',
                 style: TextStyle(
                   fontSize: 15,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary,
                 ),
               ),
               Container(
@@ -449,7 +479,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   'Méthode:',
                   style: TextStyle(
                     fontSize: 15,
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
                   ),
                 ),
                 Text(
@@ -457,7 +489,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                   ),
                 ),
               ],
@@ -474,7 +508,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   'Date:',
                   style: TextStyle(
                     fontSize: 15,
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
                   ),
                 ),
                 Text(
@@ -482,7 +518,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextPrimary
+                        : ThemeColors.lightTextPrimary,
                   ),
                 ),
               ],

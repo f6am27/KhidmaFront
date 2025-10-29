@@ -302,11 +302,10 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                 GoogleMap(
                   onMapCreated: (GoogleMapController controller) async {
                     _mapController = controller;
-                    if (isDark) {
-                      controller.setMapStyle(_darkMapStyle);
-                    }
+                    // if (isDark) {
+                    //   controller.setMapStyle(_darkMapStyle);
+                    // }
 
-                    // ✅ انتظار ثم التقريب
                     await Future.delayed(Duration(milliseconds: 500));
                     if (_workerLocation != null) {
                       controller.animateCamera(
@@ -316,7 +315,7 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                   },
                   initialCameraPosition: CameraPosition(
                     target: _nouakchottCenter,
-                    zoom: 13.0, // ← zoom أوسع في البداية
+                    zoom: 13.0,
                   ),
                   markers: _markers,
                   myLocationEnabled: false,

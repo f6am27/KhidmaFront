@@ -54,8 +54,8 @@ class NotificationModel {
       recipientRole: json['recipient_role'] as String? ?? 'client',
       taskTitle: json['task_title'] as String?,
       taskId: json['task_id'] as int?,
-      relatedPersonName: null, // سنملأها من الواجهة حسب الحاجة
-      amount: null, // سنملأها من الواجهة حسب الحاجة
+      relatedPersonName: null,
+      amount: null,
     );
   }
 

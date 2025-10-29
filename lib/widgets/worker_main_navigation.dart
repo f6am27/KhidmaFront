@@ -5,6 +5,7 @@ import '../screens/worker_screens/mission/worker_tasks_screen.dart';
 import '../screens/shared_screens/messages/messages_list_screen.dart';
 import '../screens/worker_screens/profile/profile_screen.dart';
 import '../screens/worker_screens/explore/explore_screen.dart';
+import '../core/theme/theme_colors.dart';
 
 class WorkerMainNavigation extends StatefulWidget {
   const WorkerMainNavigation({Key? key}) : super(key: key);
@@ -23,14 +24,18 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
 
     // TODO: Ajouter MyTasksScreen
     WorkerTasksScreen(),
+
     // TODO: Ajouter MessagesScreen (réutiliser client)
     MessagesListScreen(),
+
     // TODO: Ajouter ProfileScreen (adapter client)
     WorkerProfileScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -38,11 +43,17 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+          borderRadius: BorderRadius.only(
+            // ✅ أضف هذا
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 20,
+              color: isDark
+                  ? ThemeColors.shadowDark
+                  : Colors.black.withOpacity(0.08),
               offset: const Offset(0, -8),
             ),
           ],
@@ -59,30 +70,35 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home,
                   label: 'Accueil',
+                  isDark: isDark,
                 ),
                 _buildNavItem(
                   index: 1,
                   icon: Icons.explore_outlined,
                   activeIcon: Icons.explore,
                   label: 'Explorer',
+                  isDark: isDark,
                 ),
                 _buildNavItem(
                   index: 2,
                   icon: Icons.assignment_outlined,
                   activeIcon: Icons.assignment,
                   label: 'Mes Tâches',
+                  isDark: isDark,
                 ),
                 _buildNavItem(
                   index: 3,
                   icon: Icons.mail_outline,
                   activeIcon: Icons.mail,
                   label: 'Messages',
+                  isDark: isDark,
                 ),
                 _buildNavItem(
                   index: 4,
                   icon: Icons.person_outline,
                   activeIcon: Icons.person,
                   label: 'Profil',
+                  isDark: isDark,
                 ),
               ],
             ),
@@ -97,6 +113,7 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
     required IconData icon,
     required IconData activeIcon,
     required String label,
+    required bool isDark,
   }) {
     final isSelected = _currentIndex == index;
 
@@ -115,16 +132,22 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
           children: [
             Icon(
               isSelected ? activeIcon : icon,
-              color:
-                  isSelected ? AppColors.primaryPurple : AppColors.mediumGray,
+              color: isSelected
+                  ? AppColors.primaryPurple
+                  : (isDark
+                      ? ThemeColors.darkTextSecondary
+                      : AppColors.mediumGray),
               size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color:
-                    isSelected ? AppColors.primaryPurple : AppColors.mediumGray,
+                color: isSelected
+                    ? AppColors.primaryPurple
+                    : (isDark
+                        ? ThemeColors.darkTextSecondary
+                        : AppColors.mediumGray),
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               ),

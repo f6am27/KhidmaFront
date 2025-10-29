@@ -43,6 +43,10 @@ class _ClientMainNavigationState extends State<ClientMainNavigation> {
       height: 80,
       decoration: BoxDecoration(
         color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
         boxShadow: [
           BoxShadow(
             color:
