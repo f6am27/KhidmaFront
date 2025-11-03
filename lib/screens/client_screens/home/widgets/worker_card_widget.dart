@@ -5,6 +5,7 @@ import '../../../../services/favorite_workers_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../shared_screens/messages/chat_screen.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/chat_service.dart';
 
 class WorkerCardWidget extends StatefulWidget {
   final WorkerSearchResult worker; // ✅ تغيير من Map إلى Model
@@ -28,11 +29,13 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
   final FavoriteWorkersService _favoriteService = FavoriteWorkersService();
   bool _isFavorite = false;
   bool _isTogglingFavorite = false;
+  bool _isBlocked = false;
 
   @override
   void initState() {
     super.initState();
     _isFavorite = widget.worker.isFavorite;
+    _checkIfBlocked();
   }
 
   @override
@@ -43,9 +46,65 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
     }
   }
 
+  Future<void> _checkIfBlocked() async {
+    try {
+      final result = await chatService.getBlockedUsers();
+
+      if (result['ok']) {
+        final blockedUsers = result['blocked_users'] as List<dynamic>;
+        final blockedIds = <int>{};
+
+        for (var user in blockedUsers) {
+          // ✅ جرّب عدة احتمالات للـ structure
+          int? blockedId;
+
+          if (user is Map<String, dynamic>) {
+            blockedId = user['blocked_user_id'] as int? ??
+                user['blocked_user']?['id'] as int? ??
+                user['id'] as int?;
+          } else if (user is int) {
+            blockedId = user;
+          }
+
+          if (blockedId != null) {
+            blockedIds.add(blockedId);
+          }
+        }
+
+        print(
+            '✅ Blocked IDs: $blockedIds, Checking worker ID: ${widget.worker.id}');
+
+        setState(() {
+          _isBlocked = blockedIds.contains(widget.worker.id);
+        });
+
+        print('✅ Worker ${widget.worker.id} is blocked: $_isBlocked');
+      }
+    } catch (e) {
+      print('❌ Error checking blocked status: $e');
+    }
+  }
+
   /// ✅ Toggle favorite مع Backend
   Future<void> _toggleFavorite() async {
     if (_isTogglingFavorite) return;
+    // ✅ منع إضافة المحظور للمفضلة
+    if (_isBlocked) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Vous ne pouvez pas ajouter un utilisateur bloqué aux favoris'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() {
       _isTogglingFavorite = true;
@@ -155,7 +214,7 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
     );
 
     final result = await chatService.startConversation(widget.worker.id);
-    Navigator.pop(context);
+    Navigator.pop(context); // أغلق Loading
 
     if (result['ok']) {
       Navigator.push(
@@ -171,10 +230,56 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur: ${result['error']}'),
-          backgroundColor: Colors.red,
+      // ✅ تحقق من status code 403 أو رسالة block
+      final errorMessage = (result['error'] ?? '').toString().toLowerCase();
+      final statusCode = result['status'];
+
+      String displayMessage;
+
+      if (statusCode == 403 ||
+          errorMessage.contains('block') ||
+          errorMessage.contains('bloqué') ||
+          errorMessage.contains('forbidden')) {
+        displayMessage =
+            'Vous ne pouvez pas discuter avec un utilisateur bloqué';
+      } else {
+        displayMessage =
+            result['error'] ?? 'Erreur lors du démarrage de la conversation';
+      }
+
+      // ✅ عرض Dialog بدلاً من SnackBar
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.block, color: Colors.red, size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Accès refusé',
+                style: TextStyle(fontSize: 18),
+              ),
+            ],
+          ),
+          content: Text(
+            displayMessage,
+            style: TextStyle(fontSize: 15, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'OK',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: ThemeColors.primaryColor,
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -362,12 +467,18 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
                         ),
                       )
                     : Icon(
-                        _isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: _isFavorite
-                            ? Colors.red
-                            : (isDark
-                                ? ThemeColors.darkTextSecondary
-                                : Colors.grey[600]),
+                        _isBlocked
+                            ? Icons.block
+                            : (_isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border),
+                        color: _isBlocked
+                            ? Colors.grey
+                            : (_isFavorite
+                                ? Colors.red
+                                : (isDark
+                                    ? ThemeColors.darkTextSecondary
+                                    : Colors.grey[600])),
                         size: 20,
                       ),
               ),

@@ -216,6 +216,7 @@ class ChatService {
       );
 
       print('Status: ${response.statusCode}');
+      print('Response body: ${response.body}'); // ✅ للتصحيح
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -227,16 +228,32 @@ class ChatService {
           ...data,
         };
       } else {
-        print('⚠️ Failed: ${response.statusCode}');
+        // ✅ اقرأ رسالة الخطأ من Backend
+        String errorMessage = 'Failed to start conversation';
+
+        try {
+          final errorData = json.decode(response.body);
+          errorMessage = errorData['detail'] ??
+              errorData['error'] ??
+              errorData['message'] ??
+              errorMessage;
+        } catch (e) {
+          print('⚠️ Could not parse error response');
+        }
+
+        print('⚠️ Failed: ${response.statusCode} - $errorMessage');
+
         return {
           'ok': false,
-          'error': 'Failed to start conversation',
+          'status': response.statusCode, // ✅ أضف status code
+          'error': errorMessage,
         };
       }
     } catch (e) {
       print('❌ Error: $e');
       return {
         'ok': false,
+        'status': 0,
         'error': 'Network error: ${e.toString()}',
       };
     }
@@ -440,7 +457,7 @@ class ChatService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<dynamic> blockedUsers = data['blocked_users'] ?? [];
-
+        print('🔍 Blocked users structure: $blockedUsers');
         print('✅ Loaded ${blockedUsers.length} blocked users');
 
         return {

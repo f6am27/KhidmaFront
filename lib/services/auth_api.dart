@@ -14,6 +14,13 @@ class AuthApi {
   }) async {
     final uri = Uri.parse('$_base$path');
 
+    // 🔵 طباعة معلومات الطلب
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📤 POST Request');
+    print('🌐 URL: $uri');
+    print('📦 Body: ${jsonEncode(body)}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };

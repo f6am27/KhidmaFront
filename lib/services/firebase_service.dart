@@ -1,14 +1,18 @@
 // lib/services/firebase_service.dart
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+// import 'package:flutter/foundation.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../services/notification_service.dart';
 import '../core/storage/token_storage.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// Firebase Messaging Service
 class FirebaseService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static String? _fcmToken;
+  static final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   /// Get FCM token
   static String? get fcmToken => _fcmToken;
@@ -19,6 +23,7 @@ class FirebaseService {
       // Request permission for notifications
       await _requestPermission();
 
+      await clearAllNotifications();
       // Get FCM token
       _fcmToken = await _messaging.getToken();
 
@@ -26,7 +31,7 @@ class FirebaseService {
         print('🔑 FCM Token: $_fcmToken');
 
         // Register device token with backend (if user is logged in)
-        await _registerDeviceToken();
+        await registerDeviceIfLoggedIn();
       } else {
         print('⚠️ Failed to get FCM token');
       }
@@ -35,7 +40,7 @@ class FirebaseService {
       _messaging.onTokenRefresh.listen((newToken) {
         print('🔄 FCM Token refreshed: $newToken');
         _fcmToken = newToken;
-        _registerDeviceToken();
+        registerDeviceIfLoggedIn();
       });
 
       // Setup message handlers
@@ -73,8 +78,12 @@ class FirebaseService {
     }
   }
 
-  /// Register device token with backend
-  static Future<void> _registerDeviceToken() async {
+  /// Register device token with backend// ========================================
+// 🆕 دالة عامة يمكن استدعاؤها من أي مكان
+// ========================================
+
+  /// Register device token - can be called after login
+  static Future<void> registerDeviceIfLoggedIn() async {
     try {
       // Check if user is logged in
       final accessToken = await TokenStorage.readAccess();
@@ -88,24 +97,47 @@ class FirebaseService {
         return;
       }
 
-      // Determine platform
+      // Get device info
       String platform = 'web';
+      String deviceName = 'Unknown Device';
+
       if (Platform.isAndroid) {
         platform = 'android';
+        try {
+          final deviceInfo = DeviceInfoPlugin();
+          final androidInfo = await deviceInfo.androidInfo;
+          deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
+          print('📱 Device: $deviceName');
+        } catch (e) {
+          deviceName = 'Android Device';
+          print('⚠️ Could not get device name: $e');
+        }
       } else if (Platform.isIOS) {
         platform = 'ios';
+        try {
+          final deviceInfo = DeviceInfoPlugin();
+          final iosInfo = await deviceInfo.iosInfo;
+          deviceName = '${iosInfo.name} ${iosInfo.model}';
+          print('📱 Device: $deviceName');
+        } catch (e) {
+          deviceName = 'iOS Device';
+          print('⚠️ Could not get device name: $e');
+        }
       }
 
       // Register with backend
+      print(
+          '📤 Registering device: $deviceName with token: ${_fcmToken!.substring(0, 20)}...');
+
       final result = await notificationService.registerDevice(
         token: _fcmToken!,
         platform: platform,
-        deviceName: Platform.isAndroid ? 'Android Device' : 'iOS Device',
+        deviceName: deviceName,
         appVersion: '1.0.0',
       );
 
       if (result['ok']) {
-        print('✅ Device registered with backend');
+        print('✅ Device registered successfully in backend: $deviceName');
       } else {
         print('⚠️ Failed to register device: ${result['error']}');
       }
@@ -208,6 +240,23 @@ class FirebaseService {
       print('✅ FCM token deleted');
     } catch (e) {
       print('❌ Error deleting token: $e');
+    }
+  }
+
+  /// Clear all notifications from notification tray
+  static Future<void> clearAllNotifications() async {
+    try {
+      // Clear all notifications
+      await _localNotifications.cancelAll();
+
+      // Reset badge count for iOS
+      if (Platform.isIOS) {
+        await _messaging.setAutoInitEnabled(true);
+      }
+
+      print('🧹 All notifications cleared');
+    } catch (e) {
+      print('⚠️ Error clearing notifications: $e');
     }
   }
 }

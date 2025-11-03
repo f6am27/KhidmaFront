@@ -20,7 +20,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   List<FavoriteWorker> filteredWorkers = [];
   List<FavoriteWorker> allWorkers = [];
-  List<ServiceCategory> allCategories = []; // ✅ جديد
+  List<ServiceCategory> allCategories = [];
+  Set<int> blockedUserIds = {};
   String selectedCategory = 'Tous';
   bool _isLoading = true;
   String? _errorMessage;
@@ -35,6 +36,43 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     _loadData(); // جديد
   }
 
+  Future<void> _loadBlockedUsers() async {
+    try {
+      final result = await chatService.getBlockedUsers();
+
+      if (result['ok']) {
+        final blockedUsers = result['blocked_users'] as List<dynamic>;
+        final blockedIds = <int>{};
+
+        for (var user in blockedUsers) {
+          // ✅ جرّب عدة احتمالات للـ structure
+          int? blockedId;
+
+          if (user is Map<String, dynamic>) {
+            blockedId = user['blocked_user_id'] as int? ??
+                user['blocked_user']?['id'] as int? ??
+                user['id'] as int?;
+          } else if (user is int) {
+            blockedId = user;
+          }
+
+          if (blockedId != null) {
+            blockedIds.add(blockedId);
+          }
+        }
+
+        setState(() {
+          blockedUserIds = blockedIds;
+        });
+
+        print(
+            '✅ Loaded ${blockedUserIds.length} blocked users: $blockedUserIds');
+      }
+    } catch (e) {
+      print('❌ Error loading blocked users: $e');
+    }
+  }
+
   // ✅ دالة جديدة لجلب البيانات
   Future<void> _loadData() async {
     setState(() {
@@ -43,6 +81,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
 
     try {
+      // ✅ جلب المحظورين أولاً
+      await _loadBlockedUsers();
+
       // جلب الفئات
       final categoriesResult = await _categoryService.getServiceCategories();
 
@@ -56,7 +97,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           // بناء قائمة الفئات من الـ Backend
           categories = ['Tous'] + allCategories.map((cat) => cat.name).toList();
 
-          allWorkers = workersResult['workers'] as List<FavoriteWorker>;
+          final workers = workersResult['workers'] as List<FavoriteWorker>;
+          allWorkers = workers
+              .where((worker) => !blockedUserIds.contains(worker.workerId))
+              .toList();
           filteredWorkers = allWorkers;
           _isLoading = false;
         });
@@ -87,11 +131,17 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
 
     try {
+      // ✅ إعادة جلب المحظورين
+      await _loadBlockedUsers();
+
       final result = await _service.getFavoriteWorkers();
 
       if (result['ok']) {
         setState(() {
-          allWorkers = result['workers'] as List<FavoriteWorker>;
+          final workers = result['workers'] as List<FavoriteWorker>;
+          allWorkers = workers
+              .where((worker) => !blockedUserIds.contains(worker.workerId))
+              .toList();
           filteredWorkers = allWorkers;
           _isLoading = false;
         });
@@ -700,7 +750,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
 
     final result = await chatService.startConversation(worker.workerId);
-    Navigator.pop(context);
+    Navigator.pop(context); // أغلق Loading
 
     if (result['ok']) {
       Navigator.push(
@@ -716,10 +766,56 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur: ${result['error']}'),
-          backgroundColor: Colors.red,
+      // ✅ تحقق من status code 403 أو رسالة block
+      final errorMessage = (result['error'] ?? '').toString().toLowerCase();
+      final statusCode = result['status'];
+
+      String displayMessage;
+
+      if (statusCode == 403 ||
+          errorMessage.contains('block') ||
+          errorMessage.contains('bloqué') ||
+          errorMessage.contains('forbidden')) {
+        displayMessage =
+            'Vous ne pouvez pas discuter avec un utilisateur bloqué';
+      } else {
+        displayMessage =
+            result['error'] ?? 'Erreur lors du démarrage de la conversation';
+      }
+
+      // ✅ عرض Dialog بدلاً من SnackBar
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.block, color: Colors.red, size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Accès refusé',
+                style: TextStyle(fontSize: 18),
+              ),
+            ],
+          ),
+          content: Text(
+            displayMessage,
+            style: TextStyle(fontSize: 15, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'OK',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: ThemeColors.primaryColor,
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }

@@ -77,6 +77,63 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  void _showSuspensionDialog(Map<String, dynamic> suspensionData) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.block, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text('Compte suspendu', style: TextStyle(fontSize: 20)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              suspensionData['detail'] ??
+                  'Votre compte a été temporairement suspendu',
+              style: TextStyle(fontSize: 15, height: 1.6),
+            ),
+            SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.email_outlined,
+                      color: AppColors.primaryPurple, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      suspensionData['support_email'] ??
+                          'khidma.helpp@gmail.com',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK', style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const double cardRadius = 25;
@@ -417,14 +474,20 @@ class _LoginScreenState extends State<LoginScreen>
                     }
                   } else {
                     final json = r['json'] ?? {};
+
+                    // ✅ تحقق من تعليق الحساب
+                    if (json['code'] == 'account_suspended') {
+                      _showSuspensionDialog(json);
+                      return;
+                    }
+
+                    // معالجة الأخطاء الأخرى
                     String errorMessage = 'بيانات الدخول غير صحيحة';
 
-                    // معالجة أنواع مختلفة من الأخطاء
                     if (json['detail'] != null) {
                       if (json['detail'] is String) {
                         errorMessage = json['detail'];
                       } else if (json['detail'] is Map) {
-                        // إذا كانت detail تحتوي على أخطاء الحقول
                         final details = json['detail'] as Map;
                         if (details['non_field_errors'] != null) {
                           errorMessage = details['non_field_errors'][0];

@@ -10,6 +10,7 @@ import '../../shared_screens/dialogs/logout_confirmation.dart';
 import '../../shared_screens/settings/change_password.dart';
 import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
+import '../../shared_screens/settings/blocked_users_screen.dart';
 import 'widgets/reviews_ratings.dart';
 import '../../shared_screens/payment_history.dart';
 import '../../../core/config/api_config.dart';
@@ -613,6 +614,25 @@ class WorkerSettingsScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => NotificationsScreen(),
+                  ),
+                );
+              },
+            ),
+
+            SizedBox(height: 30),
+
+            // قسم الخصوصية
+            _buildSectionTitle(context, 'Confidentialité'),
+            _buildSettingsItem(
+              context: context,
+              icon: Icons.block_outlined,
+              title: 'Comptes bloqués',
+              subtitle: 'Gérer les utilisateurs bloqués',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BlockedUsersScreen(),
                   ),
                 );
               },

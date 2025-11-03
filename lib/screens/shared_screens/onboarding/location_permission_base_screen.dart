@@ -270,15 +270,13 @@ class _LocationPermissionBaseScreenState
       bool hasPermission = await locationService.requestLocationPermission();
 
       if (!hasPermission) {
-        Navigator.pop(context); // إغلاق loading dialog
+        if (mounted) Navigator.pop(context); // ✅ إضافة mounted
         widget.onLocationDenied?.call();
-        _showErrorMessage('Permission refusée');
+        if (mounted) _showErrorMessage('Permission refusée'); // ✅ إضافة mounted
         return;
       }
 
       // 2. جلب الموقع الحالي
-      // ✅ للعميل: لا ترسل للـ Backend (sendToBackend: false)
-      // ✅ للعامل: أرسل للـ Backend (sendToBackend: true)
       final bool shouldSendToBackend = (widget.userType == UserType.worker);
 
       final location = await locationService.getCurrentLocation(
@@ -286,29 +284,40 @@ class _LocationPermissionBaseScreenState
       );
 
       if (location == null) {
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context); // ✅ إضافة mounted
         widget.onLocationDenied?.call();
-        _showErrorMessage('Impossible d\'obtenir la position');
+        if (mounted)
+          _showErrorMessage(
+              'Impossible d\'obtenir la position'); // ✅ إضافة mounted
         return;
       }
 
       // 3. حفظ الموقع والحالة
-      setState(() {
-        _currentLocation = location;
-        _locationGranted = true;
-      });
+      if (mounted) {
+        // ✅ إضافة mounted
+        setState(() {
+          _currentLocation = location;
+          _locationGranted = true;
+        });
+      }
 
       await _saveLocationPermissionState(true);
 
       // 4. إغلاق dialog والإعلام
-      Navigator.pop(context); // إغلاق loading dialog
-      widget.onLocationGranted?.call();
-      _showSuccessMessage();
+      if (mounted) {
+        // ✅ إضافة mounted
+        Navigator.pop(context);
+        widget.onLocationGranted?.call();
+        _showSuccessMessage();
+      }
     } catch (e) {
       print('❌ Error in location permission: $e');
-      Navigator.pop(context);
-      widget.onLocationDenied?.call();
-      _showErrorMessage('Erreur: ${e.toString()}');
+      if (mounted) {
+        // ✅ إضافة mounted
+        Navigator.pop(context);
+        widget.onLocationDenied?.call();
+        _showErrorMessage('Erreur: ${e.toString()}');
+      }
     }
   }
 

@@ -16,18 +16,33 @@ class WorkerLocationPermissionScreen extends StatelessWidget {
       onLocationGranted: () async {
         // حفظ الحالة وتفعيل السويتش
         await _saveLocationState(true);
+
+        // ✅ تأخير صغير للتأكد من إغلاق Dialog
+        await Future.delayed(Duration(milliseconds: 200));
+
         // العودة للتطبيق الرئيسي
-        _navigateToHome(context);
+        if (context.mounted) {
+          // ✅ تحقق من mounted
+          _navigateToHome(context);
+        }
       },
       onLocationDenied: () async {
         // حفظ الحالة بدون تفعيل السويتش
         await _saveLocationState(false);
-        _navigateToHome(context);
+
+        await Future.delayed(Duration(milliseconds: 200));
+
+        if (context.mounted) {
+          _navigateToHome(context);
+        }
       },
       onManualEntry: () async {
         // حفظ الحالة بدون تفعيل السويتش
         await _saveLocationState(false);
-        _navigateToHome(context);
+
+        if (context.mounted) {
+          _navigateToHome(context);
+        }
       },
     );
   }
