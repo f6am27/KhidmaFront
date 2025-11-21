@@ -16,6 +16,7 @@ import '../../shared_screens/payment_history.dart';
 import '../../../core/config/api_config.dart';
 import '../../../services/auth_manager.dart';
 import '../../../routes/app_routes.dart';
+import '../../../services/notification_service.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   @override
@@ -43,7 +44,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     try {
       final result = await _profileService.getWorkerProfile();
-      // إضافة هذا للـ debugging
       print('=== DEBUG Profile Result ===');
       print('OK: ${result['ok']}');
       print('Full JSON: ${result['json']}');
@@ -64,7 +64,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
         if (result['needsLogin'] == true) {
           _showError('Session expirée, veuillez vous reconnecter');
-          // TODO: Navigate to login screen
         }
       }
     } catch (e) {
@@ -178,20 +177,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         child: Column(
           children: [
             SizedBox(height: 20),
-
-            // صورة البروفايل
             _buildProfilePhoto(),
             SizedBox(height: 16),
-
-            // الاسم والمعلومات
             _buildProfileInfo(),
             SizedBox(height: 30),
-
-            // الإحصائيات السريعة
             _buildQuickStats(context),
             SizedBox(height: 30),
-
-            // القائمة الرئيسية
             _buildMainMenu(context),
             SizedBox(height: 40),
           ],
@@ -202,8 +193,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
   Widget _buildProfilePhoto() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // ✅ استخدم الدالة الجديدة
     String imageUrl =
         ApiConfig.getFullMediaUrl(_workerProfile?.profileImageUrl);
 
@@ -226,14 +215,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     return Column(
       children: [
-        // الاسم
         Text(
           _workerProfile!.fullName,
           style: Theme.of(context).textTheme.displaySmall,
         ),
         SizedBox(height: 4),
-
-        // المعلومات المهنية
         Text(
           _workerProfile!.serviceCategory,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -242,14 +228,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               ),
         ),
         SizedBox(height: 4),
-
-        // عضو منذ
         Text(
           'Prestataire depuis ${_workerProfile!.memberSince}',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-
-        // المنطقة
         if (_workerProfile!.serviceArea.isNotEmpty) ...[
           SizedBox(height: 4),
           Row(
@@ -270,8 +252,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             ],
           ),
         ],
-
-        // حالة الاتصال
         if (_workerProfile!.isOnline) ...[
           SizedBox(height: 8),
           Container(
@@ -521,7 +501,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
   void _navigateToSettings(BuildContext context) async {
-    // Navigate to settings and refresh profile when returning
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -529,15 +508,43 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       ),
     );
 
-    // If settings returned with changes, refresh profile
     if (result == true) {
       _refreshProfile();
     }
   }
 }
 
-// صفحة الإعدادات للعامل - محدثة مع refresh callback
-class WorkerSettingsScreen extends StatelessWidget {
+// ✅ صفحة الإعدادات - StatefulWidget
+class WorkerSettingsScreen extends StatefulWidget {
+  @override
+  _WorkerSettingsScreenState createState() => _WorkerSettingsScreenState();
+}
+
+class _WorkerSettingsScreenState extends State<WorkerSettingsScreen> {
+  int _unreadNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationCount();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      final result = await notificationService.getStats();
+      if (result['ok']) {
+        final stats = result['statistics'];
+        if (mounted) {
+          setState(() {
+            _unreadNotifications = stats.unreadNotifications;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading notification count: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -549,8 +556,6 @@ class WorkerSettingsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 20),
-
-            // قسم الحساب
             _buildSectionTitle(context, 'Votre compte'),
             _buildSettingsItem(
               context: context,
@@ -565,7 +570,6 @@ class WorkerSettingsScreen extends StatelessWidget {
                   ),
                 );
 
-                // If profile was updated, return true to refresh parent
                 if (result == true) {
                   Navigator.pop(context, true);
                 }
@@ -586,8 +590,6 @@ class WorkerSettingsScreen extends StatelessWidget {
               },
             ),
             SizedBox(height: 30),
-
-            // قسم التفضيلات
             _buildSectionTitle(context, 'Préférences'),
             _buildSettingsItem(
               context: context,
@@ -609,19 +611,18 @@ class WorkerSettingsScreen extends StatelessWidget {
               icon: Icons.notifications_outlined,
               title: 'Notifications',
               subtitle: 'Préférences de notification',
-              onTap: () {
-                Navigator.push(
+              badgeCount: _unreadNotifications,
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => NotificationsScreen(),
                   ),
                 );
+                _loadNotificationCount();
               },
             ),
-
             SizedBox(height: 30),
-
-            // قسم الخصوصية
             _buildSectionTitle(context, 'Confidentialité'),
             _buildSettingsItem(
               context: context,
@@ -637,10 +638,7 @@ class WorkerSettingsScreen extends StatelessWidget {
                 );
               },
             ),
-
             SizedBox(height: 30),
-
-            // قسم الدعم
             _buildSectionTitle(context, 'Support'),
             _buildSettingsItem(
               context: context,
@@ -692,6 +690,7 @@ class WorkerSettingsScreen extends StatelessWidget {
     required String subtitle,
     required VoidCallback onTap,
     Color? textColor,
+    int badgeCount = 0,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -728,6 +727,26 @@ class WorkerSettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (badgeCount > 0) ...[
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                constraints: BoxConstraints(minWidth: 18),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(width: 8),
+            ],
             Icon(
               Icons.arrow_forward_ios,
               size: 16,
@@ -800,7 +819,6 @@ class WorkerSettingsScreen extends StatelessWidget {
 
   Future<void> _performLogout(BuildContext context) async {
     try {
-      // عرض مؤشر التحميل
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -809,13 +827,10 @@ class WorkerSettingsScreen extends StatelessWidget {
         ),
       );
 
-      // تسجيل الخروج من Backend
       await AuthManager.logoutWithBackend();
 
-      // إخفاء مؤشر التحميل
       if (context.mounted) Navigator.of(context).pop();
 
-      // الانتقال لشاشة اختيار نوع المستخدم
       if (context.mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.registrationType,
@@ -823,10 +838,8 @@ class WorkerSettingsScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      // إخفاء مؤشر التحميل في حالة الخطأ
       if (context.mounted) Navigator.of(context).pop();
 
-      // عرض رسالة خطأ
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

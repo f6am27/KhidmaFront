@@ -5,6 +5,8 @@ import '../../../services/task_service.dart';
 import 'task_candidates.dart';
 import 'create_task.dart';
 import '../../worker_screens/mission/task_details_screen.dart';
+import '../../../services/payment_service.dart';
+import 'package:moosyl/moosyl.dart';
 
 class TasksScreen extends StatefulWidget {
   @override
@@ -775,6 +777,149 @@ class _TasksScreenState extends State<TasksScreen>
               style: TextStyle(fontSize: 14),
             ),
             SizedBox(height: 20),
+
+            // ✅ Option Bankily (maintenant disponible)
+            InkWell(
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _initiateMoosylPayment(task, 'bankily');
+              },
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.blue, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.blue.withOpacity(0.1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet,
+                        color: Colors.blue, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paiement Bankily',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Payer via l\'application Bankily',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.blue),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 12),
+
+            // ✅ Option Sedad
+            InkWell(
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _initiateMoosylPayment(task, 'sedad');
+              },
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.orange, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.orange.withOpacity(0.1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance, color: Colors.orange, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paiement Sedad',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Payer via l\'application Sedad',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.orange),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 12),
+
+            // ✅ Option Masrivi
+            InkWell(
+              onTap: () {
+                Navigator.pop(dialogContext);
+                _initiateMoosylPayment(task, 'masrivi');
+              },
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.purple, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.purple.withOpacity(0.1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.payment, color: Colors.purple, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paiement Masrivi',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Payer via l\'application Masrivi',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.purple),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 12),
+
             // Option Cash
             InkWell(
               onTap: () {
@@ -815,54 +960,6 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                     Icon(Icons.arrow_forward_ios, color: Colors.green),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: 12),
-            // Option Bankily
-            InkWell(
-              onTap: () {
-                Navigator.pop(dialogContext);
-                _showBankilyUnavailable();
-              },
-              child: Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey, width: 2),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.grey.withOpacity(0.05),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet,
-                        color: Colors.grey, size: 32),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Paiement Bankily',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Bientôt disponible',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.lock_outline, color: Colors.grey),
                   ],
                 ),
               ),
@@ -1522,5 +1619,340 @@ class _TasksScreenState extends State<TasksScreen>
         context,
         MaterialPageRoute(
             builder: (context) => CreateTaskScreen(taskToEdit: task)));
+  }
+
+  // ════════════════════════════════════════════════════
+  // MOOSYL PAYMENT METHODS (NEW)
+  // ════════════════════════════════════════════════════
+
+  Future<void> _initiateMoosylPayment(
+      TaskModel task, String paymentMethod) async {
+    // عرض Loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Initialisation du paiement...',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // استدعاء API لإنشاء طلب الدفع
+      final result = await paymentService.initiateMoosylPayment(
+        taskId: int.parse(task.id),
+        paymentMethod: paymentMethod,
+        amount: task.budget.toDouble(),
+      );
+
+      // إغلاق Loading
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      if (result['ok']) {
+        // final paymentId = result['payment_id'] as int;
+        // final transactionId = result['transaction_id'] as String;
+        // final publishableKey = result['publishable_key'] as String;
+        // final amount = result['amount'] as double;
+
+        final paymentId = (result['payment_id'] ?? 0);
+        final transactionId = (result['transaction_id'] ?? '');
+        final publishableKey = (result['publishable_key'] ?? '');
+        final amount = (result['amount'] ?? 0).toDouble();
+
+        if (paymentId == 0 || transactionId.isEmpty || publishableKey.isEmpty) {
+          throw Exception("Missing payment information from server");
+        }
+
+        print('✅ Payment initiated successfully');
+        print('Payment ID: $paymentId');
+        print('Transaction ID: $transactionId');
+
+        // الآن نعرض رسالة للمستخدم
+        // (في المستقبل هنا سنعرض Moosyl Widget)
+        _showMoosylPaymentInfo(
+          task: task,
+          paymentId: paymentId,
+          transactionId: transactionId,
+          publishableKey: publishableKey,
+          amount: amount,
+          paymentMethod: paymentMethod,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(result['error'] ?? 'Erreur d\'initialisation'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showMoosylPaymentInfo({
+    required TaskModel task,
+    required int paymentId,
+    required String transactionId,
+    required String publishableKey,
+    required double amount,
+    required String paymentMethod,
+  }) {
+    print('════════ DEBUG MOOSYL VIEW ════════');
+    print('publishableKey: $publishableKey');
+    print('transactionId: $transactionId');
+    print('paymentId: $paymentId');
+    print('amount: $amount');
+    print('══════════════════════════════════');
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('Paiement ${_getPaymentMethodName(paymentMethod)}'),
+            backgroundColor: ThemeColors.primaryColor,
+            foregroundColor: Colors.white,
+          ),
+          body: (publishableKey.isEmpty || transactionId.isEmpty)
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Chargement...'),
+                    ],
+                  ),
+                )
+              : MoosylView(
+                  publishableApiKey: publishableKey,
+                  transactionId: transactionId,
+                  organizationLogo: Container(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'Khidma',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: ThemeColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                  onPaymentSuccess: () {
+                    print('✅ Payment successful!');
+                    Navigator.pop(context);
+                    _startPaymentVerification(task, paymentId);
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getPaymentMethodName(String method) {
+    switch (method.toLowerCase()) {
+      case 'bankily':
+        return 'Bankily';
+      case 'sedad':
+        return 'Sedad';
+      case 'masrivi':
+        return 'Masrivi';
+      default:
+        return method;
+    }
+  }
+
+  Future<void> _startPaymentVerification(TaskModel task, int paymentId) async {
+    // عرض Loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Vérification du paiement...',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // التحقق من حالة الدفع
+      final result = await paymentService.verifyMoosylPayment(
+        paymentId: paymentId,
+      );
+
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      if (result['ok']) {
+        final status = result['status'] as String;
+
+        if (status == 'completed') {
+          // ✅ الدفع اكتمل
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Paiement complété avec succès !'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // تحديث قائمة المهام
+          await _loadTasks();
+          if (mounted) {
+            _tabController.animateTo(2); // الانتقال إلى Terminées
+          }
+        } else if (status == 'processing' || status == 'pending') {
+          // ⏳ لا يزال قيد المعالجة
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.schedule, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Paiement en cours de traitement...'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        } else if (status == 'failed') {
+          // ❌ الدفع فشل
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Le paiement a échoué'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Erreur de vérification'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

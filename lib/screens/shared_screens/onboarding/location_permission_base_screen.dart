@@ -43,6 +43,7 @@ class _LocationPermissionBaseScreenState
   // ✅ متغيرات جديدة لتخزين الموقع
   LatLng? _currentLocation;
   bool _locationGranted = false;
+  bool _isProcessing = false; // ✅ لمنع الضغطات المتعددة
 
   @override
   void initState() {
@@ -212,7 +213,9 @@ class _LocationPermissionBaseScreenState
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _handlePrimaryAction,
+            onPressed: _isProcessing
+                ? null
+                : _handlePrimaryAction, // ✅ تعطيل أثناء المعالجة
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryPurple,
               foregroundColor: Colors.white,
@@ -241,7 +244,9 @@ class _LocationPermissionBaseScreenState
           SizedBox(
             width: double.infinity,
             child: TextButton(
-              onPressed: _handleSecondaryAction,
+              onPressed: _isProcessing
+                  ? null
+                  : _handleSecondaryAction, // ✅ تعطيل أثناء المعالجة
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.textSecondary,
                 padding: const EdgeInsets.symmetric(vertical: 18),
@@ -260,61 +265,50 @@ class _LocationPermissionBaseScreenState
   }
 
   // ════════════════════════════════════════════
-  // ✅ المُصحح: معالجة منفصلة للعميل والعامل
+  // ✅ الحل النهائي: معالجة صحيحة لإغلاق dialogs
   // ════════════════════════════════════════════
   void _handlePrimaryAction() async {
-    _showLoadingDialog();
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
 
     try {
-      // 1. طلب صلاحيات GPS حقيقية
+      // 1. طلب صلاحيات GPS
       bool hasPermission = await locationService.requestLocationPermission();
 
       if (!hasPermission) {
-        if (mounted) Navigator.pop(context); // ✅ إضافة mounted
+        if (mounted) setState(() => _isProcessing = false);
         widget.onLocationDenied?.call();
-        if (mounted) _showErrorMessage('Permission refusée'); // ✅ إضافة mounted
+        if (mounted) _showErrorMessage('Permission refusée');
         return;
       }
 
-      // 2. جلب الموقع الحالي
+      // 2. جلب الموقع
       final bool shouldSendToBackend = (widget.userType == UserType.worker);
-
       final location = await locationService.getCurrentLocation(
         sendToBackend: shouldSendToBackend,
       );
 
       if (location == null) {
-        if (mounted) Navigator.pop(context); // ✅ إضافة mounted
+        if (mounted) setState(() => _isProcessing = false);
         widget.onLocationDenied?.call();
-        if (mounted)
-          _showErrorMessage(
-              'Impossible d\'obtenir la position'); // ✅ إضافة mounted
+        if (mounted) _showErrorMessage('Impossible d\'obtenir la position');
         return;
       }
 
-      // 3. حفظ الموقع والحالة
-      if (mounted) {
-        // ✅ إضافة mounted
-        setState(() {
-          _currentLocation = location;
-          _locationGranted = true;
-        });
-      }
-
+      // 3. حفظ الحالة
       await _saveLocationPermissionState(true);
 
-      // 4. إغلاق dialog والإعلام
-      if (mounted) {
-        // ✅ إضافة mounted
-        Navigator.pop(context);
-        widget.onLocationGranted?.call();
-        _showSuccessMessage();
-      }
+      if (mounted) setState(() => _isProcessing = false);
+
+      // 4. الانتقال مباشرة
+      widget.onLocationGranted?.call();
     } catch (e) {
-      print('❌ Error in location permission: $e');
+      print('❌ Error: $e');
       if (mounted) {
-        // ✅ إضافة mounted
-        Navigator.pop(context);
+        setState(() => _isProcessing = false);
         widget.onLocationDenied?.call();
         _showErrorMessage('Erreur: ${e.toString()}');
       }
@@ -322,7 +316,20 @@ class _LocationPermissionBaseScreenState
   }
 
   void _handleSecondaryAction() async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
     await _saveLocationPermissionState(false);
+
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+
     widget.onManualEntry?.call();
   }
 
@@ -334,47 +341,54 @@ class _LocationPermissionBaseScreenState
     await prefs.setBool('${prefix}_location_enabled', granted);
   }
 
-  void _showLoadingDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.cardBackground,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation(AppColors.primaryPurple)),
-              const SizedBox(height: 16),
-              Text('Demande d\'autorisation...',
-                  style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // void _showLoadingDialog() {
+  //   showDialog(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (context) => WillPopScope(
+  //       onWillPop: () async => false, // ✅ منع الإغلاق بزر الرجوع
+  //       child: Dialog(
+  //         backgroundColor: AppColors.cardBackground,
+  //         shape:
+  //             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+  //         child: Padding(
+  //           padding: const EdgeInsets.all(24),
+  //           child: Column(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               CircularProgressIndicator(
+  //                   valueColor:
+  //                       AlwaysStoppedAnimation(AppColors.primaryPurple)),
+  //               const SizedBox(height: 16),
+  //               Text('Demande d\'autorisation...',
+  //                   style:
+  //                       TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+  //             ],
+  //           ),
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
-  void _showSuccessMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 12),
-            Text('Position activée avec succès!'),
-          ],
-        ),
-        backgroundColor: AppColors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
+  // void _showSuccessMessage() {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content: Row(
+  //         children: [
+  //           Icon(Icons.check_circle, color: Colors.white),
+  //           const SizedBox(width: 12),
+  //           Text('Position activée avec succès!'),
+  //         ],
+  //       ),
+  //       backgroundColor: AppColors.green,
+  //       behavior: SnackBarBehavior.floating,
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  //       margin: const EdgeInsets.all(16),
+  //       duration: Duration(seconds: 2),
+  //     ),
+  //   );
+  // }
 
   void _showErrorMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -390,6 +404,7 @@ class _LocationPermissionBaseScreenState
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: 3),
       ),
     );
   }

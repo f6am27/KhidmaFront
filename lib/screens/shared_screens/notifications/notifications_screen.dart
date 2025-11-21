@@ -6,6 +6,7 @@ import '../../../services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
 import 'widgets/notification_item.dart';
 import 'widgets/empty_notifications.dart';
+import '../settings/settings_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   @override
@@ -259,6 +260,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         centerTitle: true,
         actions: [
           // Unread count badge
+
           if (_unreadCount > 0)
             Container(
               margin: EdgeInsets.only(right: 8),
@@ -277,7 +279,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
 
+          // ✅ إضافة زر Settings
+
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Paramètres',
+          ),
+
           // Filter button
+
           IconButton(
             icon: Icon(Icons.filter_list),
             onPressed: _toggleFilter,
@@ -285,6 +303,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
 
           // More options
+
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert),
             onSelected: (value) {

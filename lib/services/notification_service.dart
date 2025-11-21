@@ -615,36 +615,40 @@ class NotificationService {
   }
 
   /// Update notification settings
+  /// Update notification settings
   Future<Map<String, dynamic>> updateSettings({
     required bool notificationsEnabled,
   }) async {
     try {
-      print('📍 Updating notification settings...');
+      print('📍 Updating notification settings to: $notificationsEnabled');
 
       final body = {
         'notifications_enabled': notificationsEnabled,
       };
 
       final response = await AuthManager.authenticatedRequest(
-        method: 'PUT',
+        method: 'PATCH', // ✅ تغيير من PUT إلى PATCH
         endpoint: '$_baseUrl/settings/',
         body: body,
       );
 
-      print('Status: ${response.statusCode}');
+      print('✅ Response status: ${response.statusCode}');
+      print('📩 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final json = _parseResponse(response);
 
-        print('✅ Settings updated');
+        print('✅ Settings updated successfully');
 
         return {
           'ok': true,
           'message': 'Paramètres mis à jour',
+          'settings': NotificationSettingsModel.fromJson(json),
           'json': json,
         };
       } else {
         final json = _parseResponse(response);
+        print('❌ Update failed: $json');
         return {
           'ok': false,
           'error': json['detail'] ?? 'Échec de mise à jour',
@@ -652,6 +656,7 @@ class NotificationService {
         };
       }
     } on AuthException catch (e) {
+      print('❌ Auth error: ${e.message}');
       return {
         'ok': false,
         'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,

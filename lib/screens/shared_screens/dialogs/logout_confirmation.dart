@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/theme_colors.dart'; // تأكد من المسار
+import '../../../core/theme/theme_colors.dart';
 
 class LogoutConfirmation extends StatelessWidget {
   final VoidCallback? onConfirm;
@@ -16,116 +16,127 @@ class LogoutConfirmation extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: Colors.black54, // خلفية شفافة مغبشة
+      color: Colors.black54,
       child: Center(
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 40),
-          padding: const EdgeInsets.all(24),
+          width: 280, // ✅ عرض ثابت أصغر
+          padding: const EdgeInsets.all(20), // ✅ padding أصغر
           decoration: BoxDecoration(
             color: isDark ? ThemeColors.darkCardBackground : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? ThemeColors.darkBorder : Colors.grey[300]!,
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: isDark
-                    ? ThemeColors.shadowDark
-                    : Colors.black.withOpacity(0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // عنوان الحوار
+              // أيقونة أصغر
+              Container(
+                width: 50, // ✅ أصغر
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1), // ✅ أحمر
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.logout_rounded,
+                  color: Colors.red, // ✅ أحمر
+                  size: 26,
+                ),
+              ),
+              const SizedBox(height: 16), // ✅ مسافة أصغر
+
+              // العنوان
               Text(
                 'Déconnexion',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 20, // ✅ أصغر
+                  fontWeight: FontWeight.bold,
                   color: isDark
                       ? ThemeColors.darkTextPrimary
                       : ThemeColors.lightTextPrimary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
-              // رسالة التأكيد
+              // الرسالة
               Text(
-                'Êtes-vous sûr de vouloir vous déconnecter ?',
+                'Êtes-vous sûr de vouloir\nvous déconnecter ?',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14, // ✅ أصغر
                   color:
-                      isDark ? ThemeColors.darkTextSecondary : Colors.black54,
+                      isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
+                  height: 1.4,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20), // ✅ مسافة أصغر
 
               // الأزرار
               Row(
                 children: [
                   // زر الإلغاء
                   Expanded(
-                    child: TextButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         Navigator.of(context).pop(false);
-                        if (onCancel != null) {
-                          onCancel!();
-                        }
+                        onCancel?.call();
                       },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      style: OutlinedButton.styleFrom(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12), // ✅ أصغر
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(
-                            color: isDark
-                                ? ThemeColors.darkBorder
-                                : Colors.grey[300]!,
-                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        side: BorderSide(
+                          color: isDark
+                              ? ThemeColors.darkBorder
+                              : Colors.grey[300]!,
+                          width: 1.5,
                         ),
                       ),
                       child: Text(
                         'Annuler',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14, // ✅ أصغر
+                          fontWeight: FontWeight.w600,
                           color: isDark
                               ? ThemeColors.darkTextSecondary
-                              : Colors.grey,
-                          fontWeight: FontWeight.w500,
+                              : Colors.grey[700],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
 
-                  // زر التأكيد
+                  // ✅ زر أحمر بدون خلفية
                   Expanded(
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         Navigator.of(context).pop(true);
-                        if (onConfirm != null) {
-                          onConfirm!();
-                        }
+                        onConfirm?.call();
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ThemeColors.primaryColor, // البنفسجي
-                        foregroundColor: Colors.white,
+                      style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        elevation: 0,
+                        side: BorderSide(
+                          color: Colors.red,
+                          width: 1.5,
+                        ),
                       ),
                       child: const Text(
                         'Se déconnecter',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red, // ✅ نص أحمر
                         ),
                       ),
                     ),
@@ -139,7 +150,6 @@ class LogoutConfirmation extends StatelessWidget {
     );
   }
 
-  // دالة مساعدة لعرض الحوار
   static Future<bool?> show(
     BuildContext context, {
     VoidCallback? onConfirm,
@@ -149,12 +159,10 @@ class LogoutConfirmation extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black54,
-      builder: (BuildContext context) {
-        return LogoutConfirmation(
-          onConfirm: onConfirm,
-          onCancel: onCancel,
-        );
-      },
+      builder: (context) => LogoutConfirmation(
+        onConfirm: onConfirm,
+        onCancel: onCancel,
+      ),
     );
   }
 }

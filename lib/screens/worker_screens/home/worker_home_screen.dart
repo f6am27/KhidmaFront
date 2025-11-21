@@ -9,6 +9,7 @@ import 'worker_opportunities_screen.dart';
 import '../../../services/auth_manager.dart';
 import '../../../core/config/api_config.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../shared_screens/dialogs/success_dialog.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -794,113 +795,182 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
 
   void _showApplicationDialog(TaskModel task) {
     final TextEditingController messageController = TextEditingController();
-    messageController.text =
-        "Je suis disponible pour cette tâche et j'ai de l'expérience dans ce domaine.";
+    messageController.text = "Bonjour, je suis disponible pour cette mission.";
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withOpacity(0.75),
       builder: (dialogContext) {
-        bool isLoading = false; // حالة Loading
+        bool isLoading = false;
 
         return StatefulBuilder(
           builder: (context, setState) {
             return Dialog(
               backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.symmetric(horizontal: 32),
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? ThemeColors.darkCardBackground
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryPurple.withOpacity(0.3),
+                      blurRadius: 30,
+                      offset: Offset(0, 15),
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryPurple.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(Icons.person_add,
-                              color: AppColors.primaryPurple, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Postuler pour la mission',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? ThemeColors.darkTextPrimary
-                                  : ThemeColors.lightTextPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(task.title,
-                        style: TextStyle(
-                            fontSize: 14, color: AppColors.textSecondary)),
-                    const SizedBox(height: 20),
-
-                    // TextField
-                    TextField(
-                      controller: messageController,
-                      maxLines: 4,
-                      enabled: !isLoading,
-                      decoration: InputDecoration(
-                        hintText: 'Message optionnel...',
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        contentPadding: const EdgeInsets.all(16),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Buttons
-                    if (isLoading)
-                      CircularProgressIndicator(color: AppColors.primaryPurple)
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              child: Text('Annuler'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                _submitApplication(
-                                  dialogContext,
-                                  task,
-                                  messageController.text,
-                                  (loading) =>
-                                      setState(() => isLoading = loading),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryPurple,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: Text('Envoyer',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
+                    // 🎯 Logo التطبيق
+                    SizedBox(height: 24),
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryPurple.withOpacity(0.2),
+                            blurRadius: 15,
+                            offset: Offset(0, 8),
                           ),
                         ],
                       ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/kh.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // 📝 Title فقط
+                    Text(
+                      'Postuler',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[900],
+                      ),
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // 💬 Message Field
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.grey[200]!,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: TextField(
+                          controller: messageController,
+                          maxLines: 3,
+                          enabled: !isLoading,
+                          style: TextStyle(fontSize: 13, height: 1.4),
+                          decoration: InputDecoration(
+                            hintText: 'Votre message...',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 13,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(14),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: 20),
+
+                    // 🔘 Buttons - نفس الحجم
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      child: isLoading
+                          ? Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    AppColors.primaryPurple,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext),
+                                    style: OutlinedButton.styleFrom(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 14),
+                                      side: BorderSide(
+                                        color: Colors.grey[300]!,
+                                        width: 1.5,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Annuler',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      _submitApplication(
+                                        dialogContext,
+                                        task,
+                                        messageController.text,
+                                        (loading) =>
+                                            setState(() => isLoading = loading),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primaryPurple,
+                                      elevation: 0,
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Envoyer',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
                   ],
                 ),
               ),
@@ -917,7 +987,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     String message,
     Function(bool) setDialogState,
   ) async {
-    setDialogState(true); // أظهر Loading في Dialog
+    setDialogState(true);
 
     try {
       print('📤 Sending application for task: ${task.id}');
@@ -929,40 +999,79 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
 
       print('📥 API Response: $result');
 
+      // ✅ أغلق Dialog التقديم أولاً
+      if (Navigator.canPop(dialogContext)) {
+        Navigator.pop(dialogContext);
+      }
+
       if (!mounted) return;
 
-      Navigator.pop(dialogContext); // أغلق Dialog
+      if (result['ok'] == true) {
+        // ✅ نجاح
+        await Future.delayed(Duration(milliseconds: 100)); // ← مهم للانتظار!
 
-      if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Candidature envoyée avec succès!'),
-            backgroundColor: AppColors.green,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        _loadTasks();
+        if (mounted) {
+          SuccessDialog.show(
+            context,
+            title: 'SUCCESS!',
+            message: 'Votre candidature a été envoyée avec succès.',
+            isSuccess: true,
+            onDone: () {
+              _loadTasks();
+            },
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erreur'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        // ✅ تحقق من الخطأ
+        final errorMsg = result['error']?.toString() ?? '';
+
+        if (errorMsg.contains('déjà') ||
+            errorMsg.contains('already') ||
+            errorMsg.toLowerCase().contains('existe')) {
+          // ✅ تقدم من قبل
+          await Future.delayed(Duration(milliseconds: 100));
+
+          if (mounted) {
+            SuccessDialog.show(
+              context,
+              title: 'Déjà postulé',
+              message: 'Vous avez déjà postulé pour cette mission.',
+              isSuccess: false,
+            );
+          }
+        } else {
+          // ✅ خطأ عادي
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text(errorMsg.isNotEmpty ? errorMsg : 'Erreur inconnue'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       print('❌ Error: $e');
-      if (mounted) {
+
+      if (Navigator.canPop(dialogContext)) {
         Navigator.pop(dialogContext);
+      }
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erreur: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }

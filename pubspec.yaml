@@ -10,8 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations: 
+    sdk: flutter
+    
   url_launcher: ^6.2.0  
-  intl: ^0.18.0  # للتاريخ DateFormat
+  intl: 0.20.2  # للتاريخ DateFormat
   http: ^1.2.1
   flutter_secure_storage: ^9.0.0
   flutter_svg: ^2.0.9
@@ -38,7 +41,8 @@ dependencies:
   device_info_plus: ^10.1.0
   flutter_local_notifications: ^17.0.0
 
-
+#Moosyl : 
+  moosyl: ^1.0.10
 
 
 dev_dependencies:

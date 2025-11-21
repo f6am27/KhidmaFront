@@ -5,6 +5,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
 import '../../../services/location_service.dart';
+import '../../shared_screens/dialogs/success_dialog.dart';
 
 class WorkerExploreScreen extends StatefulWidget {
   @override
@@ -611,82 +612,175 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
 
   void _showApplicationDialog(TaskModel task) {
     final TextEditingController messageController = TextEditingController();
-    messageController.text =
-        "Je suis disponible pour cette tâche et j'ai de l'expérience dans ce domaine.";
+    messageController.text = "Bonjour, je suis disponible pour cette mission.";
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.75),
       builder: (dialogContext) {
         bool isLoading = false;
-        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor:
-                  isDark ? ThemeColors.darkCardBackground : Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Text(
-                'Postuler pour cette tâche',
-                style: TextStyle(color: isDark ? Colors.white : Colors.black),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Tâche: ${task.title}',
-                    style: TextStyle(
-                        color: isDark ? Colors.white70 : Colors.grey[700]),
-                  ),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: messageController,
-                    maxLines: 3,
-                    enabled: !isLoading,
-                    style:
-                        TextStyle(color: isDark ? Colors.white : Colors.black),
-                    decoration: InputDecoration(
-                      labelText: 'Message',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: ThemeColors.primaryColor),
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.symmetric(horizontal: 32),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ThemeColors.primaryColor.withOpacity(0.3),
+                      blurRadius: 30,
+                      offset: Offset(0, 15),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 24),
+                    Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: ThemeColors.primaryColor.withOpacity(0.2),
+                            blurRadius: 15,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/kh.png',
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                if (isLoading)
-                  Center(
-                      child: CircularProgressIndicator(
-                          color: ThemeColors.primaryColor))
-                else ...[
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: Text('Annuler'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      _submitApplicationFromMap(
-                        dialogContext,
-                        task,
-                        messageController.text,
-                        (loading) => setState(() => isLoading = loading),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ThemeColors.primaryColor,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                    SizedBox(height: 16),
+                    Text(
+                      'Postuler',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[900],
+                      ),
                     ),
-                    child:
-                        Text('Envoyer', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ],
+                    SizedBox(height: 16),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.grey[200]!,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: TextField(
+                          controller: messageController,
+                          maxLines: 3,
+                          enabled: !isLoading,
+                          style: TextStyle(fontSize: 13, height: 1.4),
+                          decoration: InputDecoration(
+                            hintText: 'Votre message...',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 13,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      child: isLoading
+                          ? Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    ThemeColors.primaryColor,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext),
+                                    style: OutlinedButton.styleFrom(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 14),
+                                      side: BorderSide(
+                                        color: Colors.grey[300]!,
+                                        width: 1.5,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Annuler',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      _submitApplicationFromMap(
+                                        dialogContext,
+                                        task,
+                                        messageController.text,
+                                        (loading) =>
+                                            setState(() => isLoading = loading),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: ThemeColors.primaryColor,
+                                      elevation: 0,
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Envoyer',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         );
@@ -700,52 +794,95 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     String message,
     Function(bool) setDialogState,
   ) async {
-    setDialogState(true); // أظهر Loading
+    setDialogState(true);
 
     try {
+      print('📤 Sending application from map for task: ${task.id}');
+
       final result = await taskService.applyToTask(
         taskId: task.id,
         message: message,
       );
 
-      if (!mounted) return;
+      print('📥 API Response: $result');
 
-      // ✅ أغلق Dialog أولاً
-      Navigator.pop(dialogContext);
+      // ✅ أغلق Dialog التقديم أولاً
+      if (Navigator.canPop(dialogContext)) {
+        Navigator.pop(dialogContext);
+      }
+
+      if (!mounted) return;
 
       // ✅ أغلق Task Card
       _hideTaskCard();
 
-      // ✅ أظهر النتيجة
-      if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Candidature envoyée avec succès!'),
-            backgroundColor: ThemeColors.successColor,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-        await _loadTasks();
+      // ✅ انتظر قليلاً قبل عرض Success Dialog
+      await Future.delayed(Duration(milliseconds: 100));
+
+      if (result['ok'] == true) {
+        // ✅ نجاح
+        if (mounted) {
+          SuccessDialog.show(
+            context,
+            title: 'SUCCESS!',
+            message: 'Votre candidature a été envoyée avec succès.',
+            isSuccess: true,
+            onDone: () {
+              _loadTasks();
+            },
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erreur'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        // ✅ تحقق من الخطأ
+        final errorMsg = result['error']?.toString() ?? '';
+
+        if (errorMsg.contains('déjà') ||
+            errorMsg.contains('already') ||
+            errorMsg.toLowerCase().contains('existe')) {
+          // ✅ تقدم من قبل
+          if (mounted) {
+            SuccessDialog.show(
+              context,
+              title: 'Déjà postulé',
+              message: 'Vous avez déjà postulé pour cette mission.',
+              isSuccess: false,
+            );
+          }
+        } else {
+          // ✅ خطأ عادي
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text(errorMsg.isNotEmpty ? errorMsg : 'Erreur inconnue'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
-      if (mounted) {
+      print('❌ Error: $e');
+
+      if (Navigator.canPop(dialogContext)) {
         Navigator.pop(dialogContext);
+      }
+
+      if (mounted) {
+        _hideTaskCard();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text('Erreur: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }

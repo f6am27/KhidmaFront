@@ -171,6 +171,13 @@ class AuthManager {
               body: body != null ? jsonEncode(body) : null,
             );
             break;
+          case 'PATCH': // ✅ إضافة PATCH
+            response = await _client.patch(
+              uri,
+              headers: headers,
+              body: body != null ? jsonEncode(body) : null,
+            );
+            break;
           case 'DELETE':
             response = await _client.delete(uri, headers: headers);
             break;

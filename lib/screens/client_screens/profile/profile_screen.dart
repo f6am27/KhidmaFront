@@ -15,6 +15,7 @@ import 'widgets/favorite_providers.dart';
 import '../../shared_screens/payment_history.dart';
 import '../../../services/auth_manager.dart';
 import '../../../routes/app_routes.dart';
+import '../../../services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -489,7 +490,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // صفحة الإعدادات
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
+  @override
+  _SettingsScreenState createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  int _unreadNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationCount();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      final result = await notificationService.getStats();
+      if (result['ok']) {
+        final stats = result['statistics'];
+        if (mounted) {
+          setState(() {
+            _unreadNotifications = stats.unreadNotifications;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading notification count: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -550,19 +580,20 @@ class SettingsScreen extends StatelessWidget {
                 );
               },
             ),
-            _buildThemeSettingsItem(context),
             _buildSettingsItem(
               context: context,
               icon: Icons.notifications_outlined,
               title: 'Notifications',
               subtitle: 'Préférences de notification',
-              onTap: () {
-                Navigator.push(
+              badgeCount: _unreadNotifications,
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => NotificationsScreen(),
                   ),
                 );
+                _loadNotificationCount();
               },
             ),
             SizedBox(height: 30),
@@ -633,6 +664,7 @@ class SettingsScreen extends StatelessWidget {
     required String subtitle,
     required VoidCallback onTap,
     Color? textColor,
+    int badgeCount = 0,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -669,6 +701,27 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
+// ✅ Badge على اليمين
+            if (badgeCount > 0) ...[
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                constraints: BoxConstraints(minWidth: 18),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              SizedBox(width: 8),
+            ],
             Icon(
               Icons.arrow_forward_ios,
               size: 16,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:moosyl/moosyl.dart'; // ✅
+import 'package:flutter_localizations/flutter_localizations.dart'; // ✅
 
 // الثيم والألوان
 import 'core/theme/theme_provider.dart';
@@ -22,18 +24,17 @@ import 'screens/authentication_screens/reset_password_screen.dart';
 import 'screens/authentication_screens/registration_screen.dart';
 
 // الويدجتس والطرق
-// import 'widgets/client_main_navigation.dart';
 import 'routes/app_routes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ← جديد: تهيئة Firebase
+  // ← تهيئة Firebase
   try {
     await Firebase.initializeApp();
     print('✅ Firebase initialized successfully');
 
-    // ← جديد: تهيئة Firebase Messaging Service
+    // ← تهيئة Firebase Messaging Service
     await FirebaseService.initialize();
     print('✅ Firebase Messaging initialized successfully');
   } catch (e) {
@@ -62,6 +63,20 @@ class MicroEmploiApp extends StatelessWidget {
           theme: AppThemes.lightTheme,
           darkTheme: AppThemes.darkTheme,
           themeMode: themeProvider.themeMode,
+
+          // ✅ إضافة Localization Delegates
+          localizationsDelegates: [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+
+          // ✅ اللغات المدعومة
+          supportedLocales: [
+            Locale('en', ''), // English
+            Locale('fr', ''), // French
+            Locale('ar', ''), // Arabic
+          ],
 
           // البداية والطرق
           initialRoute: AppRoutes.splash,

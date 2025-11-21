@@ -4,7 +4,7 @@ class ApiConfig {
   // ========================================
   // 🔧 الإعدادات - غيّر IP كمبيوترك هنا فقط
   // ========================================
-  static const String _realDeviceIp = 'http://172.20.10.3:8000';
+  static const String _realDeviceIp = 'http://172.20.10.2:8000';
 // ← IP كمبيوترك على WiFi
   static const String _emulatorIp = 'http://10.0.2.2:8000'; // للمحاكي Android
   static const String _localhostIp = 'http://127.0.0.1:8000'; // لـ iOS/Web

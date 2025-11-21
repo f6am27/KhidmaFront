@@ -311,6 +311,124 @@ class PaymentService {
     }
   }
 
+  /// Initiate Moosyl payment (Bankily, Sedad, Masrivi)
+  Future<Map<String, dynamic>> initiateMoosylPayment({
+    required int taskId,
+    required String paymentMethod,
+    required double amount,
+  }) async {
+    try {
+      String endpoint = '$_baseUrl/moosyl/initiate/';
+
+      print('📍 Initiating Moosyl payment: $endpoint');
+      print('Task ID: $taskId');
+      print('Method: $paymentMethod');
+      print('Amount: $amount');
+
+      String? token = await AuthManager.getValidAccessToken();
+
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final body = jsonEncode({
+        'task_id': taskId,
+        'payment_method': paymentMethod,
+        'amount': amount,
+      });
+
+      final response = await _client.post(
+        Uri.parse(endpoint),
+        headers: headers,
+        body: body,
+      );
+
+      print('Status: ${response.statusCode}');
+      print('Response: ${response.body}');
+
+      if (response.statusCode == 201) {
+        final json = jsonDecode(response.body);
+
+        return {
+          'ok': true,
+          'payment_id': json['payment_id'],
+          'transaction_id': json['transaction_id'],
+          'publishable_key': json['publishable_key'],
+          'amount': json['amount'],
+          'message': json['message'],
+        };
+      } else {
+        final json = jsonDecode(response.body);
+        return {
+          'ok': false,
+          'error': json['error'] ?? 'Échec de l\'initialisation du paiement',
+        };
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Verify Moosyl payment status
+  Future<Map<String, dynamic>> verifyMoosylPayment({
+    required int paymentId,
+  }) async {
+    try {
+      String endpoint = '$_baseUrl/moosyl/verify/$paymentId/';
+
+      print('📍 Verifying payment: $endpoint');
+
+      String? token = await AuthManager.getValidAccessToken();
+
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await _client.get(
+        Uri.parse(endpoint),
+        headers: headers,
+      );
+
+      print('Status: ${response.statusCode}');
+      print('Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+
+        return {
+          'ok': true,
+          'status': json['status'],
+          'message': json['message'],
+          'payment': json['payment'],
+        };
+      } else {
+        final json = jsonDecode(response.body);
+        return {
+          'ok': false,
+          'error': json['error'] ?? 'Erreur de vérification',
+        };
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
+      };
+    }
+  }
+
   void dispose() {
     _client.close();
   }

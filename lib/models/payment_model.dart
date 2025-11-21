@@ -12,6 +12,8 @@ class PaymentModel {
   final String receiverName;
   final DateTime createdAt;
   final String? transactionId;
+  final String? moosylTransactionId;
+  final String? publishableKey;
 
   PaymentModel({
     required this.id,
@@ -25,6 +27,8 @@ class PaymentModel {
     required this.receiverName,
     required this.createdAt,
     this.transactionId,
+    this.moosylTransactionId,
+    this.publishableKey,
   });
 
   factory PaymentModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class PaymentModel {
       receiverName: json['receiver_name'] as String? ?? 'Unknown',
       createdAt: DateTime.parse(json['created_at'] as String),
       transactionId: json['transaction_id'] as String?,
+      moosylTransactionId: json['moosyl_transaction_id'] as String?,
+      publishableKey: json['publishable_key'] as String?,
     );
   }
 
@@ -57,6 +63,9 @@ class PaymentModel {
       'receiver_name': receiverName,
       'created_at': createdAt.toIso8601String(),
       if (transactionId != null) 'transaction_id': transactionId,
+      if (moosylTransactionId != null)
+        'moosyl_transaction_id': moosylTransactionId,
+      if (publishableKey != null) 'publishable_key': publishableKey,
     };
   }
 
