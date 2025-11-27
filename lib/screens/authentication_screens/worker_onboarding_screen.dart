@@ -6,14 +6,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:micro_emploi_app/constants/colors.dart';
 import 'package:micro_emploi_app/constants/text_styles.dart';
 import 'package:micro_emploi_app/routes/app_routes.dart';
-import '../../services/auth_api.dart'; // <<< ADD
+import '../../services/auth_api.dart';
 import '../../core/storage/token_storage.dart';
-
-// === NEW imports ===
 import '../../services/category_service.dart';
 import '../../services/profile_service.dart';
 import '../../models/models.dart';
 import '../../services/auth_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WorkerOnboardingScreen extends StatefulWidget {
   @override
@@ -277,6 +276,10 @@ class _WorkerOnboardingScreenState extends State<WorkerOnboardingScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profil créé avec succès!')),
           );
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('worker_nav_index', 0);
+          await prefs.remove('worker_nav_index');
 
           Navigator.pushReplacementNamed(
             context,

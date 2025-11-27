@@ -16,13 +16,14 @@ class LogoutConfirmation extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: Colors.black54,
+      color: Colors.transparent, // ✅ خلفية شفافة بدلاً من black54
       child: Center(
         child: Container(
-          width: 280, // ✅ عرض ثابت أصغر
-          padding: const EdgeInsets.all(20), // ✅ padding أصغر
+          width: 280,
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+            color: (isDark ? ThemeColors.darkCardBackground : Colors.white)
+                .withOpacity(0.85), // ✅ شفافية 0.85
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -35,27 +36,27 @@ class LogoutConfirmation extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // أيقونة أصغر
+              // أيقونة
               Container(
-                width: 50, // ✅ أصغر
+                width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1), // ✅ أحمر
+                  color: Colors.red.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.logout_rounded,
-                  color: Colors.red, // ✅ أحمر
+                  color: Colors.red,
                   size: 26,
                 ),
               ),
-              const SizedBox(height: 16), // ✅ مسافة أصغر
+              const SizedBox(height: 16),
 
               // العنوان
               Text(
                 'Déconnexion',
                 style: TextStyle(
-                  fontSize: 20, // ✅ أصغر
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: isDark
                       ? ThemeColors.darkTextPrimary
@@ -68,14 +69,14 @@ class LogoutConfirmation extends StatelessWidget {
               Text(
                 'Êtes-vous sûr de vouloir\nvous déconnecter ?',
                 style: TextStyle(
-                  fontSize: 14, // ✅ أصغر
+                  fontSize: 14,
                   color:
                       isDark ? ThemeColors.darkTextSecondary : Colors.grey[600],
                   height: 1.4,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 20), // ✅ مسافة أصغر
+              const SizedBox(height: 20),
 
               // الأزرار
               Row(
@@ -88,8 +89,7 @@ class LogoutConfirmation extends StatelessWidget {
                         onCancel?.call();
                       },
                       style: OutlinedButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12), // ✅ أصغر
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -103,7 +103,7 @@ class LogoutConfirmation extends StatelessWidget {
                       child: Text(
                         'Annuler',
                         style: TextStyle(
-                          fontSize: 14, // ✅ أصغر
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: isDark
                               ? ThemeColors.darkTextSecondary
@@ -114,7 +114,7 @@ class LogoutConfirmation extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
 
-                  // ✅ زر أحمر بدون خلفية
+                  // زر تسجيل الخروج
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
@@ -136,7 +136,7 @@ class LogoutConfirmation extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.red, // ✅ نص أحمر
+                          color: Colors.red,
                         ),
                       ),
                     ),
@@ -158,7 +158,7 @@ class LogoutConfirmation extends StatelessWidget {
     return showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black54,
+      barrierColor: Colors.black.withOpacity(0.3), // ✅ خلفية شفافة خفيفة
       builder: (context) => LogoutConfirmation(
         onConfirm: onConfirm,
         onCancel: onCancel,

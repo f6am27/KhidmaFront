@@ -9,6 +9,7 @@ import '../screens/worker_screens/explore/explore_screen.dart';
 import '../core/theme/theme_colors.dart';
 import '../services/notification_service.dart';
 import '../services/chat_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WorkerMainNavigation extends StatefulWidget {
   const WorkerMainNavigation({Key? key}) : super(key: key);
@@ -20,22 +21,36 @@ class WorkerMainNavigation extends StatefulWidget {
 class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
   int _currentIndex = 0;
   int _unreadNotifications = 0;
+  bool _indexLoaded = false;
   int _unreadMessages = 0;
   Timer? _updateTimer;
 
-  final List<Widget> _screens = [
-    const WorkerHomeScreen(),
-    WorkerExploreScreen(),
-    WorkerTasksScreen(),
-    MessagesListScreen(),
-    WorkerProfileScreen(),
-  ];
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _screens = [
+      const WorkerHomeScreen(),
+      WorkerExploreScreen(),
+      WorkerTasksScreen(),
+      MessagesListScreen(),
+      WorkerProfileScreen(),
+    ];
+    _loadSavedIndex(); // ✅ استعادة آخر tab
     _loadCounts();
     _startAutoUpdate();
+  }
+
+// ✅ دالة جديدة لاستعادة الـ index
+  Future<void> _loadSavedIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt('worker_nav_index') ?? 0;
+    if (!mounted) return;
+    setState(() {
+      _currentIndex = (saved >= 0 && saved < 5) ? saved : 0;
+      _indexLoaded = true;
+    });
   }
 
   @override
@@ -46,7 +61,10 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
 
   void _startAutoUpdate() {
     _updateTimer = Timer.periodic(Duration(seconds: 10), (_) {
-      _loadCounts();
+      if (mounted) {
+        // ✅ تحقق من mounted قبل التحديث
+        _loadCounts();
+      }
     });
   }
 
@@ -84,12 +102,20 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    print('🟢 WorkerMainNavigation build, index=$_currentIndex');
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (!_indexLoaded) {
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: _screens, // ✅ استخدام نفس الـ instances
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -169,24 +195,32 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
     final isSelected = _currentIndex == index;
 
     return GestureDetector(
-      onTap: () {
-        setState(() => _currentIndex = index);
-        if (index == 3) {
-          setState(() => _unreadMessages = 0);
+      onTap: () async {
+        // ← أضيفي async
+        if (mounted) {
+          setState(() => _currentIndex = index);
+
+          // ✅ حفظ الـ index
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('worker_nav_index', index);
+
+          if (index == 3) {
+            setState(() => _unreadMessages = 0);
+          }
         }
       },
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: isSelected
-                  ? AppColors.primaryPurple.withOpacity(0.1)
-                  : Colors.transparent,
-            ),
-            child: Column(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: isSelected
+              ? AppColors.primaryPurple.withOpacity(0.1)
+              : Colors.transparent,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none, // ✅ مهم
+          children: [
+            Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
@@ -213,32 +247,30 @@ class _WorkerMainNavigationState extends State<WorkerMainNavigation> {
                 ),
               ],
             ),
-          ),
-
-          // Badge
-          if (badge > 0)
-            Positioned(
-              right: 4,
-              top: 0,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                constraints: BoxConstraints(minWidth: 18, minHeight: 18),
-                child: Text(
-                  badge > 99 ? '99+' : '$badge',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+            if (badge > 0)
+              Positioned(
+                right: 0,
+                top: -4,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  textAlign: TextAlign.center,
+                  constraints: BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Text(
+                    badge > 99 ? '99+' : '$badge',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

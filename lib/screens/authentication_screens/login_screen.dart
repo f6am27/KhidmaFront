@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:micro_emploi_app/constants/colors.dart';
 import 'package:micro_emploi_app/constants/text_styles.dart';
 import 'package:micro_emploi_app/routes/app_routes.dart';
-// >>> ADD: imports
 import '../../services/auth_api.dart';
 import '../../core/storage/token_storage.dart';
-// <<< END ADD
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -466,6 +465,12 @@ class _LoginScreenState extends State<LoginScreen>
                         arguments: {'role': 'worker'},
                       );
                     } else {
+                      if (serverRole == 'worker') {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setInt(
+                            'worker_nav_index', 0); // ← إعادة تعيين للـ Home
+                      }
+
                       Navigator.pushReplacementNamed(
                         context,
                         AppRoutes.home,

@@ -35,20 +35,20 @@ dependencies:
   geolocator: ^10.1.0
   flutter_foreground_task: ^8.11.0
 
-    # ✅ Firebase Dependencies - NEW
+  # ✅ Firebase Dependencies
   firebase_core: ^3.8.1
   firebase_messaging: ^15.1.5
   device_info_plus: ^10.1.0
   flutter_local_notifications: ^17.0.0
 
-#Moosyl : 
+  # Moosyl
   moosyl: ^1.0.10
-
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.13.1  # ✅ هنا صحيح
 
 flutter:
   uses-material-design: true
@@ -57,3 +57,10 @@ flutter:
     - assets/images/
     - assets/flags/mr.svg
     - assets/animations/loader.json
+    - assets/icon/ 
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true

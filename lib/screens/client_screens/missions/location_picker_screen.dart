@@ -18,6 +18,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   GoogleMapController? _mapController;
   LatLng? _selectedLocation;
   String _currentAddress = 'Recherche de votre position...';
+  Set<Circle> _circles = {};
   bool _isLoadingLocation = true;
   bool _isLoadingAddress = false;
 
@@ -56,10 +57,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
       final LatLng currentLocation =
           LatLng(position.latitude, position.longitude);
-
       setState(() {
         _selectedLocation = currentLocation;
         _isLoadingLocation = false;
+        _circles = {
+          Circle(
+            circleId: CircleId('user_accuracy'),
+            center: currentLocation,
+            radius: 100,
+            fillColor: Colors.blue.withOpacity(0.15),
+            strokeColor: Colors.blue.withOpacity(0.5),
+            strokeWidth: 2,
+          ),
+        };
       });
 
       // تحريك الكاميرا للموقع الحالي
@@ -228,6 +238,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void _onMapTap(LatLng location) {
     setState(() {
       _selectedLocation = location;
+      _circles = {
+        Circle(
+          circleId: CircleId('user_accuracy'),
+          center: location,
+          radius: 100,
+          fillColor: Colors.blue.withOpacity(0.15),
+          strokeColor: Colors.blue.withOpacity(0.5),
+          strokeWidth: 2,
+        ),
+      };
     });
     _getAddressFromLatLng(location);
   }
@@ -339,13 +359,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       onDragEnd: (LatLng newPosition) {
                         setState(() {
                           _selectedLocation = newPosition;
+                          _circles = {
+                            Circle(
+                              circleId: CircleId('user_accuracy'),
+                              center: newPosition,
+                              radius: 100,
+                              fillColor: Colors.blue.withOpacity(0.15),
+                              strokeColor: Colors.blue.withOpacity(0.5),
+                              strokeWidth: 2,
+                            ),
+                          };
                         });
                         _getAddressFromLatLng(newPosition);
                       },
                     ),
                   }
                 : {},
-
+            circles: _circles,
             myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,

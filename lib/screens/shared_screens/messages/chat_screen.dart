@@ -15,6 +15,7 @@ class ChatScreen extends StatefulWidget {
   final int contactId;
   final bool isOnline;
   final String? profileImageUrl;
+  final String? myProfileImageUrl;
 
   const ChatScreen({
     Key? key,
@@ -23,6 +24,7 @@ class ChatScreen extends StatefulWidget {
     required this.contactId,
     this.isOnline = false,
     this.profileImageUrl,
+    this.myProfileImageUrl,
   }) : super(key: key);
 
   @override
@@ -139,37 +141,63 @@ class _ChatScreenState extends State<ChatScreen> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.3),
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: isDark ? ThemeColors.darkSurface : Colors.white,
-          title: Text(
-            'Signaler l\'utilisateur',
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black,
-              fontWeight: FontWeight.w600,
-            ),
+          backgroundColor: (isDark ? ThemeColors.darkSurface : Colors.white)
+              .withOpacity(0.65),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          title: Column(
             children: [
+              Icon(
+                Icons.flag,
+                color: Colors.red,
+                size: 48,
+              ),
+              SizedBox(height: 12),
               Text(
-                'Choisissez la raison du signalement:',
+                'Signaler l\'utilisateur',
                 style: TextStyle(
-                  color: isDark ? Colors.white70 : Colors.grey[700],
-                  fontSize: 16,
+                  color: isDark ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
                 ),
               ),
-              SizedBox(height: 16),
-              ...reasons.map((reason) => _buildReportOption(
-                    context,
-                    isDark,
-                    reason['label']!,
-                    _getIconData(reason['icon']!),
-                    reason['description']!,
-                    reason['value']!,
-                  )),
             ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height *
+                  0.4, // ✅ أقصى ارتفاع 40% من الشاشة
+            ),
+            child: SingleChildScrollView(
+              // ✅ قابل للتمرير
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choisissez la raison du signalement:',
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.grey[700],
+                      fontSize: 16,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  ...reasons.map((reason) => _buildReportOption(
+                        context,
+                        isDark,
+                        reason['label']!,
+                        _getIconData(reason['icon']!),
+                        reason['description']!,
+                        reason['value']!,
+                      )),
+                ],
+              ),
+            ),
           ),
           actions: [
             TextButton(
@@ -305,9 +333,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.3), // ✅ خلفية شفافة
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: isDark ? ThemeColors.darkSurface : Colors.white,
+          backgroundColor: (isDark ? ThemeColors.darkSurface : Colors.white)
+              .withOpacity(0.85), // ✅ شفافية 0.85
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -331,7 +361,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ),
           content: Text(
-            'Êtes-vous sûr de vouloir bloquer ${widget.contactName}?\n\nVous ne recevrez plus de messages de cette personne.',
+            'Êtes-vous sûr de vouloir bloquer ${widget.contactName}?',
             style: TextStyle(
               color: isDark ? Colors.white70 : Colors.grey[700],
               fontSize: 15,
@@ -671,7 +701,26 @@ class _ChatScreenState extends State<ChatScreen> {
                             itemCount: messages.length,
                             itemBuilder: (context, index) {
                               final message = messages[index];
-                              return _buildMessageBubble(message, isDark);
+
+                              bool showDateHeader = false;
+                              if (index == 0) {
+                                showDateHeader = true;
+                              } else {
+                                final previousMessage = messages[index - 1];
+                                if (message.dateKey !=
+                                    previousMessage.dateKey) {
+                                  showDateHeader = true;
+                                }
+                              }
+
+                              return Column(
+                                children: [
+                                  if (showDateHeader)
+                                    _buildDateHeader(
+                                        message.formattedDate, isDark),
+                                  _buildMessageBubble(message, isDark),
+                                ],
+                              );
                             },
                           ),
           ),
@@ -679,6 +728,30 @@ class _ChatScreenState extends State<ChatScreen> {
           // Message input area
           _buildMessageInput(isDark),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDateHeader(String dateText, bool isDark) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      alignment: Alignment.center,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.grey[800]?.withOpacity(0.5)
+              : Colors.grey[300]?.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          dateText,
+          style: TextStyle(
+            color: isDark ? Colors.white70 : Colors.grey[700],
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -737,8 +810,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 SizedBox(height: 4),
+                // ✅✅✅ استبدال timeAgo بـ formattedTime ✅✅✅
                 Text(
-                  message.timeAgo,
+                  message.formattedTime, // ✅ هنا التغيير
                   style: TextStyle(
                     color: message.isFromMe
                         ? Colors.white70
@@ -746,6 +820,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontSize: 12,
                   ),
                 ),
+                // ✅✅✅ نهاية التغيير ✅✅✅
               ],
             ),
           ),
@@ -754,11 +829,16 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               radius: 16,
               backgroundColor: ThemeColors.primaryColor.withOpacity(0.1),
-              child: Icon(
-                Icons.person,
-                size: 16,
-                color: ThemeColors.primaryColor,
-              ),
+              backgroundImage: widget.myProfileImageUrl != null
+                  ? NetworkImage(widget.myProfileImageUrl!)
+                  : null,
+              child: widget.myProfileImageUrl == null
+                  ? Icon(
+                      Icons.person,
+                      size: 16,
+                      color: ThemeColors.primaryColor,
+                    )
+                  : null,
             ),
           ],
         ],

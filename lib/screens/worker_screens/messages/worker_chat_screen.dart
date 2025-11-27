@@ -244,7 +244,7 @@ class _WorkerChatScreenState extends State<WorkerChatScreen> {
         backgroundColor: AppColors.background,
         elevation: 1,
         leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.pop(context),
           icon: Icon(
             Icons.arrow_back_ios,
             color: AppColors.textPrimary,

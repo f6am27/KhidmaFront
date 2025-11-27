@@ -16,6 +16,8 @@ class ClientProfile {
   final String memberSince;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isOnline;
+  final DateTime? lastSeen;
 
   ClientProfile({
     required this.id,
@@ -34,6 +36,8 @@ class ClientProfile {
     required this.memberSince,
     required this.createdAt,
     required this.updatedAt,
+    required this.isOnline,
+    this.lastSeen,
   });
 
   // Computed properties
@@ -69,6 +73,10 @@ class ClientProfile {
       memberSince: json['member_since'] ?? '',
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      isOnline: json['is_online'] ?? false,
+      lastSeen: json['last_seen'] != null
+          ? DateTime.tryParse(json['last_seen'])
+          : null,
     );
   }
 
@@ -91,6 +99,8 @@ class ClientProfile {
       'member_since': memberSince,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'is_online': isOnline,
+      'last_seen': lastSeen?.toIso8601String(),
     };
   }
 
@@ -112,6 +122,8 @@ class ClientProfile {
     String? memberSince,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isOnline,
+    DateTime? lastSeen,
   }) {
     return ClientProfile(
       id: id ?? this.id,
@@ -130,12 +142,14 @@ class ClientProfile {
       memberSince: memberSince ?? this.memberSince,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isOnline: isOnline ?? this.isOnline,
+      lastSeen: lastSeen ?? this.lastSeen,
     );
   }
 
   @override
   String toString() {
-    return 'ClientProfile{id: $id, fullName: $fullName, tasksPublished: $totalTasksPublished}';
+    return 'ClientProfile{id: $id, fullName: $fullName, tasksPublished: $totalTasksPublished, isOnline: $isOnline}';
   }
 
   @override

@@ -71,6 +71,8 @@ class TaskModel {
   final TaskStatus status;
   final DateTime createdAt;
   final int applicantsCount;
+  final int clientId;
+  final String? clientPhone;
   final String? assignedProvider;
   final int? providerRating;
   final bool isUrgent;
@@ -91,6 +93,8 @@ class TaskModel {
     required this.status,
     required this.createdAt,
     required this.applicantsCount,
+    required this.clientId,
+    this.clientPhone,
     this.assignedProvider,
     this.providerRating,
     this.isUrgent = false,
@@ -134,6 +138,8 @@ class TaskModel {
       createdAt: _parseDateTime(json['createdAt'] ?? json['created_at']),
       applicantsCount:
           _parseToInt(json['applicantsCount'] ?? json['applicants_count'] ?? 0),
+      clientId: _parseToInt(json['client'] ?? json['client_id'] ?? 0),
+      clientPhone: json['client_phone'],
       assignedProvider: json['assignedProvider'] ?? json['assigned_provider'],
       providerRating: json['providerRating'] != null
           ? _parseToInt(json['providerRating'])
@@ -143,7 +149,6 @@ class TaskModel {
       isUrgent: json['isUrgent'] ?? json['is_urgent'] ?? false,
       coordinates: coords,
       timeDescription: json['timeDescription'] ?? json['time_description'],
-      // ✅ التعديل الوحيد هنا:
       distance: json['distance_from_worker'] != null
           ? double.tryParse(json['distance_from_worker'].toString())
           : null,
@@ -189,6 +194,8 @@ class TaskModel {
     TaskStatus? status,
     DateTime? createdAt,
     int? applicantsCount,
+    int? clientId,
+    String? clientPhone,
     String? assignedProvider,
     int? providerRating,
     bool? isUrgent,
@@ -206,6 +213,8 @@ class TaskModel {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       applicantsCount: applicantsCount ?? this.applicantsCount,
+      clientId: clientId ?? this.clientId,
+      clientPhone: clientPhone ?? this.clientPhone,
       assignedProvider: assignedProvider ?? this.assignedProvider,
       providerRating: providerRating ?? this.providerRating,
       isUrgent: isUrgent ?? this.isUrgent,
@@ -238,6 +247,6 @@ class TaskModel {
 
   @override
   String toString() {
-    return 'TaskModel(id: $id, title: $title, status: ${status.displayText}, budget: $budget MRU)';
+    return 'TaskModel(id: $id, title: $title, status: ${status.displayText}, budget: $budget MRU, clientId: $clientId)';
   }
 }

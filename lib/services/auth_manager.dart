@@ -238,6 +238,33 @@ class AuthManager {
     return token != null;
   }
 
+  /// Update online status (for app lifecycle changes)
+  static Future<void> updateOnlineStatus(bool isOnline) async {
+    try {
+      final accessToken = await getValidAccessToken();
+      if (accessToken == null) return;
+
+      final baseUrl = ApiConfig.baseUrl().replaceAll('/users', '/chat'); // ✅
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/update-status/'), // ✅
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({'is_online': isOnline}),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Online status updated: $isOnline');
+      } else {
+        print('⚠️ Status update failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('⚠️ Error updating online status: $e');
+    }
+  }
+
   /// Logout and clear all tokens
   static Future<void> logout() async {
     await TokenStorage.clear();

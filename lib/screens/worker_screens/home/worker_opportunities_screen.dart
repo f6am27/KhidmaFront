@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../services/profile_service.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../shared_screens/dialogs/success_dialog.dart';
+import '../../../utils/apply_helper.dart';
 
 class WorkerOpportunitiesScreen extends StatefulWidget {
   final String filterType; // 'category', 'distance', 'price', 'region'
@@ -158,6 +159,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
+        centerTitle: true, // ✅ إضافة هذا السطر
         leading: IconButton(
           icon: Icon(
             Icons.arrow_back,
@@ -176,17 +178,6 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.tune,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkTextPrimary
-                  : ThemeColors.lightTextPrimary,
-            ),
-            onPressed: _showAdvancedFilters,
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -351,35 +342,55 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         setState(() => selectedArea = value);
         _loadTasks();
       },
+      offset: const Offset(0, 48), // ✅ تبدأ من تحت الزر مباشرة
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      color: Theme.of(context).brightness == Brightness.dark
+          ? ThemeColors.darkCardBackground.withOpacity(0.85)
+          : Colors.white.withOpacity(0.85),
+      elevation: 8,
+      constraints: BoxConstraints(
+        maxHeight: 300, // ✅ أقصى ارتفاع 300px فقط
+        minWidth: 200, // ✅ عرض مناسب
+      ),
       itemBuilder: (context) {
         return areaNames.map((areaName) {
+          final isSelected = selectedArea == areaName;
+
           return PopupMenuItem<String>(
             value: areaName,
-            child: Container(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkCardBackground
-                  : Colors.white,
-              child: Row(
-                children: [
-                  if (selectedArea == areaName) ...[
-                    Icon(Icons.check, size: 16, color: AppColors.primaryPurple),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
+            height: 48, // ✅ ارتفاع ثابت لكل عنصر
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            child: Row(
+              children: [
+                if (isSelected) ...[
+                  Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: AppColors.primaryPurple,
+                  ),
+                  const SizedBox(width: 12),
+                ] else ...[
+                  const SizedBox(width: 30), // ✅ مسافة للمحاذاة
+                ],
+                Expanded(
+                  child: Text(
                     areaName,
                     style: TextStyle(
-                      color: selectedArea == areaName
+                      color: isSelected
                           ? AppColors.primaryPurple
                           : Theme.of(context).brightness == Brightness.dark
                               ? ThemeColors.darkTextPrimary
                               : ThemeColors.lightTextPrimary,
-                      fontWeight: selectedArea == areaName
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontSize: 14,
                     ),
+                    overflow: TextOverflow.ellipsis, // ✅ قص النص الطويل
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         }).toList();
@@ -533,9 +544,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
             ? ThemeColors.darkCardBackground
             : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: isUrgent
-            ? Border.all(color: AppColors.orange.withOpacity(0.3), width: 1)
-            : null,
+        border: isUrgent ? Border.all(color: Colors.red, width: 2.5) : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -571,15 +580,19 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.orange.withOpacity(0.1),
+                          color: Colors.red.withOpacity(0.1), // ✅ خلفية حمراء
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red, // ✅ حافة حمراء
+                            width: 2, // ✅ سميكة
+                          ),
                         ),
                         child: Text(
                           'URGENT',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.orange,
+                            color: Colors.red, // ✅ نص أحمر
                           ),
                         ),
                       ),
@@ -597,31 +610,32 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!locationService.isLocationFresh &&
-                        task.distance != null) ...[
-                      Icon(Icons.schedule, size: 12, color: Colors.orange),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(
-                      '${task.distance?.toStringAsFixed(1) ?? '?'} km',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.green,
+              if (task.distance != null) // ✅ فقط إذا كان هناك مسافة حقيقية
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!locationService.isLocationFresh) ...[
+                        Icon(Icons.schedule, size: 12, color: Colors.orange),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        '${task.distance!.toStringAsFixed(1)} km',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.green,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -663,7 +677,17 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               Row(
                 children: [
                   GestureDetector(
-                    onTap: () => _showApplicationDialog(task),
+                    onTap: () {
+                      print(
+                          '▶️ Opportunités Postuler pressed, task=${task.id}');
+
+                      try {
+                        _showApplicationDialog(task);
+                      } catch (e, stack) {
+                        print('❌ Error opening opportunities apply dialog: $e');
+                        print(stack);
+                      }
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
@@ -681,21 +705,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? ThemeColors.darkCardBackground.withOpacity(0.5)
-                          : Colors.grey[100]!,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.chat_bubble_outline,
-                      color: AppColors.primaryPurple,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                  // const SizedBox(width: 8),
                 ],
               ),
               Text(
@@ -791,140 +801,9 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
     );
   }
 
-  void _showAdvancedFilters() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? ThemeColors.darkCardBackground
-              : Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Filtres avancés',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextPrimary
-                        : ThemeColors.lightTextPrimary,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close, color: AppColors.mediumGray),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Trier par',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? ThemeColors.darkTextPrimary
-                    : ThemeColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildAdvancedOption('Prix croissant', 'price_asc'),
-            _buildAdvancedOption('Distance croissante', 'distance_asc'),
-            _buildAdvancedOption('Urgent en premier', 'urgent'),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _loadTasks();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryPurple,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Appliquer',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdvancedOption(String title, String value) {
-    final isSelected = selectedSortType == value;
-
-    return GestureDetector(
-      onTap: () => setState(() {
-        selectedSortType = isSelected ? 'none' : value;
-      }),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primaryPurple.withOpacity(0.1)
-              : Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkCardBackground.withOpacity(0.5)
-                  : Colors.grey[100]!,
-          borderRadius: BorderRadius.circular(12),
-          border:
-              isSelected ? Border.all(color: AppColors.primaryPurple) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isSelected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              color:
-                  isSelected ? AppColors.primaryPurple : AppColors.mediumGray,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? AppColors.primaryPurple
-                    : Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextPrimary
-                        : ThemeColors.lightTextPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showApplicationDialog(TaskModel task) {
+    print('🟢 _showApplicationDialog (opportunities) for task: ${task.id}');
+
     final TextEditingController messageController = TextEditingController();
     messageController.text = "Bonjour, je suis disponible pour cette mission.";
 
@@ -1118,6 +997,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
     String message,
     Function(bool) setDialogState,
   ) async {
+    print('🟢 _submitApplication ENTERED');
     setDialogState(true);
 
     try {
@@ -1135,45 +1015,14 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       // ✅ أغلق Dialog التقديم
       Navigator.pop(dialogContext);
 
-      if (result['ok']) {
-        // ✅ نجاح
-        SuccessDialog.show(
-          context,
-          title: 'SUCCESS!',
-          message: 'Votre candidature a été envoyée avec succès.',
-          isSuccess: true,
-          onDone: () {
-            _loadTasks();
-          },
-        );
-      } else {
-        // ✅ تحقق من الخطأ
-        final errorMsg = result['error'] ?? 'Erreur inconnue';
-
-        if (errorMsg.contains('déjà postulé') ||
-            errorMsg.contains('already applied') ||
-            errorMsg.contains('already exists')) {
-          // ✅ تقدم من قبل
-          SuccessDialog.show(
-            context,
-            title: 'Déjà postulé',
-            message: 'Vous avez déjà postulé pour cette mission.',
-            isSuccess: false,
-          );
-        } else {
-          // ✅ خطأ عادي
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMsg),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        }
-      }
+      // ✅ استخدام الدالة الموحدة - سطر واحد فقط!
+      handleApplyResult(
+        context,
+        result,
+        onSuccessDone: () {
+          _loadTasks();
+        },
+      );
     } catch (e) {
       print('❌ Error: $e');
       if (mounted) {

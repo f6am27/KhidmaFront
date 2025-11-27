@@ -107,238 +107,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildStatusBanner(context),
-            _buildTimeline(context),
-            _buildOtherPartyInfo(context),
-            _buildPaymentInfo(context),
-            SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBanner(BuildContext context) {
-    Color statusColor;
-    String statusText;
-
-    switch (widget.task.status) {
-      case TaskStatus.active:
-        if (widget.task.workStartedAt != null) {
-          statusColor = AppColors.cyan;
-          statusText = 'En cours';
-        } else {
-          statusColor = Colors.orange;
-          statusText = 'Acceptée';
-        }
-        break;
-      case TaskStatus.workCompleted:
-        statusColor = AppColors.orange;
-        statusText = 'En attente de confirmation';
-        break;
-      case TaskStatus.completed:
-        statusColor = AppColors.green;
-        statusText = 'Terminée';
-        break;
-      case TaskStatus.cancelled:
-        statusColor = Colors.red;
-        statusText = 'Annulée';
-        break;
-      default:
-        statusColor = Colors.grey;
-        statusText = 'Publiée';
-    }
-
-    return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withOpacity(0.3), width: 1.5),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            statusText,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: statusColor,
-            ),
-          ),
-          if (widget.task.isUrgent)
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                'URGENT',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeline(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.all(16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? ThemeColors.darkCardBackground
-            : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Chronologie',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkTextPrimary
-                  : ThemeColors.lightTextPrimary,
-            ),
-          ),
-          Divider(height: 24),
-          if (widget.task.workStartedAt != null)
-            _buildTimelineItem(
-              'Commencée',
-              _formatDateTime(widget.task.workStartedAt!),
-              true,
-            ),
-          if (widget.task.status == TaskStatus.completed)
-            _buildTimelineItem(
-              'Confirmée',
-              _paymentData != null
-                  ? _formatDateTime(_paymentData!.createdAt)
-                  : 'Confirmée',
-              true,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineItem(String title, String time, bool isCompleted) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: isCompleted ? AppColors.green : AppColors.lightGray,
-              shape: BoxShape.circle,
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextPrimary
-                        : ThemeColors.lightTextPrimary,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  time,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextSecondary
-                        : ThemeColors.lightTextSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOtherPartyInfo(BuildContext context) {
-    // لا نعرض شيئاً إذا لم تكن المهمة مكتملة أو لا يوجد بيانات دفع
-    if (widget.task.status != TaskStatus.completed || _paymentData == null) {
-      return SizedBox.shrink();
-    }
-
-    final isWorkerView = widget.userRole == 'worker';
-    final name =
-        isWorkerView ? _paymentData!.payerName : _paymentData!.receiverName;
-    final role = isWorkerView ? 'Client' : 'Prestataire';
-
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? ThemeColors.darkCardBackground
-            : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            role,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkTextPrimary
-                  : ThemeColors.lightTextPrimary,
-            ),
-          ),
-          Divider(height: 24),
-          Text(
-            name,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? ThemeColors.darkTextPrimary
-                  : ThemeColors.lightTextPrimary,
-            ),
-          ),
-        ],
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: _buildPaymentInfo(context),
       ),
     );
   }
@@ -350,6 +120,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
 
     final isPaid = widget.task.status == TaskStatus.completed;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // استخدام بيانات الدفع إذا كانت متاحة
     final amountToDisplay = _paymentData?.amount ??
@@ -357,6 +128,11 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
     final initialBudget = widget.task.budget.toDouble();
     final showBudgetDifference = amountToDisplay != initialBudget;
+
+    final isWorkerView = widget.userRole == 'worker';
+    final payerName = _paymentData?.payerName ?? 'Client';
+    final receiverName = _paymentData?.receiverName ??
+        (widget.task.assignedProvider ?? 'Prestataire');
 
     print('════════ PAYMENT INFO DISPLAY ════════');
     print('User Role: ${widget.userRole}');
@@ -368,162 +144,283 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
     return Container(
       margin: EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isPaid
-            ? AppColors.green.withOpacity(0.1)
-            : AppColors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPaid ? AppColors.green : AppColors.orange,
-          width: 2,
-        ),
+        color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'État du paiement',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isPaid ? AppColors.green : AppColors.orange,
+          // أيقونة النجاح الدائرية
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: isPaid
+                    ? [
+                        AppColors.green.withOpacity(0.2),
+                        AppColors.green.withOpacity(0.1),
+                      ]
+                    : [
+                        AppColors.orange.withOpacity(0.2),
+                        AppColors.orange.withOpacity(0.1),
+                      ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Container(
+              margin: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isPaid ? AppColors.green : AppColors.orange,
+              ),
+              child: Icon(
+                isPaid ? Icons.check : Icons.access_time,
+                color: Colors.white,
+                size: 32,
+              ),
             ),
           ),
-          SizedBox(height: 16),
 
-          // المبلغ
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Montant:',
+          SizedBox(height: 20),
+
+          // عنوان الحالة
+          Text(
+            isPaid ? 'Paiement Confirmé' : 'En Attente de Paiement',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: isDark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
+            ),
+          ),
+
+          SizedBox(height: 8),
+
+          // رسالة فرعية
+          Text(
+            isPaid
+                ? 'Le paiement a été effectué avec succès'
+                : 'En attente de confirmation du client',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark
+                  ? ThemeColors.darkTextSecondary
+                  : ThemeColors.lightTextSecondary,
+            ),
+          ),
+
+          // عرض الوقت المنقضي منذ بداية المهمة
+          if (widget.task.workStartedAt != null) ...[
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? ThemeColors.darkTextSecondary.withOpacity(0.1)
+                    : ThemeColors.lightTextSecondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _getTimeAgo(widget.task.workStartedAt!),
                 style: TextStyle(
-                  fontSize: 15,
-                  color: Theme.of(context).brightness == Brightness.dark
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDark
                       ? ThemeColors.darkTextSecondary
                       : ThemeColors.lightTextSecondary,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ),
+          ],
+
+          SizedBox(height: 24),
+
+          // خط فاصل
+          Container(
+            height: 1,
+            color: isDark
+                ? ThemeColors.darkTextSecondary.withOpacity(0.2)
+                : ThemeColors.lightTextSecondary.withOpacity(0.2),
+          ),
+
+          SizedBox(height: 24),
+
+          // تفاصيل الدفع
+          _buildPaymentDetailRow(
+            context,
+            widget.task.title,
+            null,
+            isHeader: true,
+          ),
+
+          SizedBox(height: 16),
+
+          _buildPaymentDetailRow(
+            context,
+            widget.task.serviceType,
+            '${amountToDisplay.toStringAsFixed(0)} MRU',
+          ),
+
+          if (_paymentData != null && isPaid) ...[
+            SizedBox(height: 12),
+            _buildPaymentDetailRow(
+              context,
+              _paymentData!.paymentMethodDisplay,
+              null,
+            ),
+          ],
+
+          if (showBudgetDifference) ...[
+            SizedBox(height: 12),
+            _buildPaymentDetailRow(
+              context,
+              'Budget initial',
+              '${initialBudget.toStringAsFixed(0)} MRU',
+              isStriked: true,
+            ),
+          ],
+
+          SizedBox(height: 20),
+
+          // خط فاصل
+          Container(
+            height: 1,
+            color: isDark
+                ? ThemeColors.darkTextSecondary.withOpacity(0.2)
+                : ThemeColors.lightTextSecondary.withOpacity(0.2),
+          ),
+
+          SizedBox(height: 20),
+
+          // المجموع النهائي
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark
+                      ? ThemeColors.darkTextPrimary
+                      : ThemeColors.lightTextPrimary,
+                ),
+              ),
+              Text(
+                '${amountToDisplay.toStringAsFixed(0)} MRU',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isPaid ? AppColors.green : AppColors.orange,
+                ),
+              ),
+            ],
+          ),
+
+          // معلومات الدافع والمستلم
+          if (_paymentData != null && isPaid) ...[
+            SizedBox(height: 24),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? ThemeColors.darkTextSecondary.withOpacity(0.1)
+                    : ThemeColors.lightTextSecondary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
                 children: [
-                  Text(
-                    '${amountToDisplay.toStringAsFixed(0)} MRU',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? ThemeColors.darkTextPrimary
-                          : ThemeColors.lightTextPrimary,
-                    ),
-                  ),
-                  if (showBudgetDifference) ...[
-                    SizedBox(height: 4),
-                    Text(
-                      'Budget initial: ${initialBudget.toStringAsFixed(0)} MRU',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? ThemeColors.darkTextSecondary
-                            : ThemeColors.lightTextSecondary,
-                        decoration: TextDecoration.lineThrough,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Payé par',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark
+                              ? ThemeColors.darkTextSecondary
+                              : ThemeColors.lightTextSecondary,
+                        ),
                       ),
+                      Text(
+                        payerName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? ThemeColors.darkTextPrimary
+                              : ThemeColors.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Reçu par',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark
+                              ? ThemeColors.darkTextSecondary
+                              : ThemeColors.lightTextSecondary,
+                        ),
+                      ),
+                      Text(
+                        receiverName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? ThemeColors.darkTextPrimary
+                              : ThemeColors.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_paymentData!.createdAt != null) ...[
+                    SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Date',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark
+                                ? ThemeColors.darkTextSecondary
+                                : ThemeColors.lightTextSecondary,
+                          ),
+                        ),
+                        Text(
+                          _formatDateTime(_paymentData!.createdAt),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? ThemeColors.darkTextPrimary
+                                : ThemeColors.lightTextPrimary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
               ),
-            ],
-          ),
-
-          SizedBox(height: 12),
-
-          // الحالة
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Statut:',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? ThemeColors.darkTextSecondary
-                      : ThemeColors.lightTextSecondary,
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isPaid ? AppColors.green : AppColors.orange,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isPaid ? '✓ Payé' : '⏳ En attente',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // طريقة الدفع (إذا كانت متاحة)
-          if (_paymentData != null && isPaid) ...[
-            SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Méthode:',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextSecondary
-                        : ThemeColors.lightTextSecondary,
-                  ),
-                ),
-                Text(
-                  _paymentData!.paymentMethodDisplay,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextPrimary
-                        : ThemeColors.lightTextPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ],
-
-          // تاريخ الدفع (إذا كان متاحاً)
-          if (_paymentData != null && isPaid) ...[
-            SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Date:',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextSecondary
-                        : ThemeColors.lightTextSecondary,
-                  ),
-                ),
-                Text(
-                  _formatDateTime(_paymentData!.createdAt),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? ThemeColors.darkTextPrimary
-                        : ThemeColors.lightTextPrimary,
-                  ),
-                ),
-              ],
             ),
           ],
         ],
@@ -531,7 +428,75 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     );
   }
 
+  Widget _buildPaymentDetailRow(
+    BuildContext context,
+    String label,
+    String? value, {
+    bool isHeader = false,
+    bool isStriked = false,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: isHeader ? 15 : 14,
+              fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
+              color: isHeader
+                  ? (isDark
+                      ? ThemeColors.darkTextPrimary
+                      : ThemeColors.lightTextPrimary)
+                  : (isDark
+                      ? ThemeColors.darkTextSecondary
+                      : ThemeColors.lightTextSecondary),
+            ),
+          ),
+        ),
+        if (value != null)
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? ThemeColors.darkTextPrimary
+                  : ThemeColors.lightTextPrimary,
+              decoration: isStriked ? TextDecoration.lineThrough : null,
+            ),
+          ),
+      ],
+    );
+  }
+
   String _formatDateTime(DateTime dateTime) {
-    return DateFormat('dd/MM/yyyy à HH:mm').format(dateTime);
+    return DateFormat('MMM d, yyyy à HH:mm', 'fr_FR').format(dateTime);
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Il y a ${difference.inSeconds} secondes';
+    } else if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return 'Il y a $minutes minute${minutes > 1 ? 's' : ''}';
+    } else if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return 'Il y a $hours heure${hours > 1 ? 's' : ''}';
+    } else if (difference.inDays < 30) {
+      final days = difference.inDays;
+      return 'Il y a $days jour${days > 1 ? 's' : ''}';
+    } else if (difference.inDays < 365) {
+      final months = (difference.inDays / 30).floor();
+      return 'Il y a $months mois';
+    } else {
+      final years = (difference.inDays / 365).floor();
+      return 'Il y a $years an${years > 1 ? 's' : ''}';
+    }
   }
 }

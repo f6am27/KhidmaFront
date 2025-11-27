@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
+import '../../../models/task_model.dart';
 import '../../../services/task_service.dart';
 import '../../../services/location_service.dart';
 import '../../shared_screens/dialogs/success_dialog.dart';
+import '../../shared_screens/messages/chat_screen.dart';
+import '../../../services/chat_service.dart';
+import '../../../utils/apply_helper.dart';
+import '../../../services/profile_service.dart';
 
 class WorkerExploreScreen extends StatefulWidget {
   @override
   _WorkerExploreScreenState createState() => _WorkerExploreScreenState();
 }
 
-class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
+class _WorkerExploreScreenState extends State<WorkerExploreScreen>
+    with WidgetsBindingObserver {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
+  Set<Circle> _circles = {};
   TaskModel? _selectedTask;
   bool _showTaskDetails = false;
   bool _isLocationEnabled = false;
@@ -23,32 +31,77 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
   bool _isLoadingTasks = true;
   List<TaskModel> _availableTasks = [];
   double _maxDistance = 40.0;
+  String? _workerCategory;
+  bool _filterByCategory = false;
 
   static const LatLng _nouakchottCenter = LatLng(18.0735, -15.9582);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      print('🔄 App resumed - reloading location state');
+      _loadLocationState();
+    }
+  }
+
+  @override
+  void didUpdateWidget(WorkerExploreScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadLocationState();
   }
 
   Future<void> _initialize() async {
     await _loadLocationState();
+    await _loadWorkerCategory();
     await _loadTasks();
+  }
+
+  Future<void> _loadWorkerCategory() async {
+    try {
+      // جلب فئة العامل من الملف الشخصي
+      final result = await profileService.getWorkerProfile();
+      if (result['ok']) {
+        final workerProfile = result['workerProfile'] as WorkerProfile;
+        _workerCategory = workerProfile.serviceCategory;
+        print('🔎 Worker category loaded: $_workerCategory');
+      }
+    } catch (e) {
+      print('❌ Error loading worker category: $e');
+    }
   }
 
   Future<void> _loadLocationState() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      _isLocationEnabled = prefs.getBool('worker_location_enabled') ?? false;
+
+      print('🔍 Location enabled from prefs: $_isLocationEnabled');
+
       final lastLocation = await locationService.getLastSavedLocation();
-      _isLocationEnabled = locationService.isTracking;
 
       if (lastLocation != null) {
         setState(() {
           _workerLocation = lastLocation;
         });
+        print('📍 Worker location loaded: $_workerLocation');
+        await _createMarkers();
       } else if (_isLocationEnabled) {
         await _getCurrentLocation();
       }
+      await _createMarkers();
     } catch (e) {
       print('Error loading location state: $e');
     }
@@ -68,16 +121,47 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
         _isLoadingTasks = false;
         if (result['ok']) {
           _availableTasks = result['tasks'] as List<TaskModel>;
+
           print('📡 Raw API Response: ${result}');
           print('📍 Total tasks: ${_availableTasks.length}');
           for (var task in _availableTasks) {
-            print('Task: ${task.title} → Coordinates: ${task.coordinates}');
+            print(
+                'Task: ${task.title} → Category: ${task.serviceType} → Coordinates: ${task.coordinates}');
           }
 
           _createMarkers();
         }
       });
     }
+  }
+
+  List<TaskModel> get _filteredTasks {
+    // ✅ أولاً: فلترة المهام التي تحتوي على إحداثيات فقط
+    List<TaskModel> tasksWithCoordinates =
+        _availableTasks.where((task) => task.coordinates != null).toList();
+
+    // ✅ ثانياً: فلترة حسب الفئة (إذا كانت الفلترة مفعلة)
+    if (!_filterByCategory ||
+        _workerCategory == null ||
+        _workerCategory!.isEmpty) {
+      // بدون فلترة حسب الفئة: إرجاع كل المهام التي لها إحداثيات
+      return tasksWithCoordinates;
+    }
+
+    // مع الفلترة: فقط مهام فئة العامل + التي لها إحداثيات
+    final workerCat = _workerCategory!.toLowerCase().trim();
+    return tasksWithCoordinates.where((task) {
+      final taskCat = task.serviceType.toLowerCase().trim();
+      return taskCat == workerCat;
+    }).toList();
+  }
+
+  Future<void> _onRefresh() async {
+    print('🔄 Refreshing...');
+    await _loadLocationState();
+    await _loadTasks();
+    print(
+        '✅ Refresh completed - Location: $_isLocationEnabled, Worker at: $_workerLocation');
   }
 
   Future<void> _getCurrentLocation() async {
@@ -122,25 +206,41 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
 
   Future<void> _createMarkers() async {
     Set<Marker> markers = {};
+    Set<Circle> circles = {};
 
-    // ✅ دبوس أخضر لموقع العامل
     if (_isLocationEnabled && _workerLocation != null) {
+      print('✅ Adding worker marker at: $_workerLocation');
+
       markers.add(
         Marker(
           markerId: MarkerId('worker_location'),
           position: _workerLocation!,
-          icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           infoWindow: InfoWindow(
-            title: 'Votre position',
-            snippet: 'Travailleur',
+            title: '📍 Votre position',
+            snippet: 'Vous êtes ici',
           ),
+          zIndex: 1000,
+          consumeTapEvents: false,
         ),
       );
+
+      circles.add(
+        Circle(
+          circleId: CircleId('worker_accuracy'),
+          center: _workerLocation!,
+          radius: 100,
+          fillColor: Colors.blue.withOpacity(0.15),
+          strokeColor: Colors.blue.withOpacity(0.5),
+          strokeWidth: 2,
+        ),
+      );
+    } else {
+      print(
+          '⚠️ Worker location NOT added - Enabled: $_isLocationEnabled, Location: $_workerLocation');
     }
 
-    // ✅ دبابيس للمهام
-    for (TaskModel task in _availableTasks) {
+    for (TaskModel task in _filteredTasks) {
       if (task.coordinates == null) continue;
 
       String distanceText = '';
@@ -149,14 +249,13 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
         distanceText = ' - ${distanceKm.toStringAsFixed(1)} km';
       }
 
-      // ✅ تحديد اللون حسب الأولوية
       BitmapDescriptor markerIcon;
       if (task.isUrgent) {
         markerIcon =
             BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
       } else {
         markerIcon =
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
       }
 
       markers.add(
@@ -175,18 +274,11 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
 
     setState(() {
       _markers = markers;
+      _circles = circles;
     });
-  }
 
-  // Future<BitmapDescriptor> _createCustomMarker(Color color) async {
-  //   if (color == Colors.red) {
-  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-  //   } else if (color == Colors.green) {
-  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-  //   } else {
-  //     return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
-  //   }
-  // }
+    print('📍 Total markers: ${markers.length}, Circles: ${circles.length}');
+  }
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -260,7 +352,34 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
         centerTitle: true,
         backgroundColor: isDark ? ThemeColors.darkBackground : Colors.white,
         elevation: 1,
+        automaticallyImplyLeading: false,
         actions: [
+          // ✅ زر الفلترة حسب الفئة
+          if (_workerCategory != null && _workerCategory!.isNotEmpty)
+            Container(
+              margin: EdgeInsets.only(right: 8),
+              child: IconButton(
+                onPressed: () {
+                  setState(() {
+                    _filterByCategory = !_filterByCategory;
+                    _createMarkers(); // إعادة إنشاء العلامات
+                  });
+                },
+                icon: Icon(
+                  _filterByCategory
+                      ? Icons.filter_alt
+                      : Icons.filter_alt_outlined,
+                  color: _filterByCategory
+                      ? ThemeColors.primaryColor
+                      : (isDark ? Colors.white70 : Colors.black54),
+                ),
+                tooltip: _filterByCategory
+                    ? 'Afficher toutes les tâches'
+                    : 'Filtrer par ma catégorie',
+              ),
+            ),
+
+          // الزر الأصلي للموقع
           Container(
             margin: EdgeInsets.only(right: 16),
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -303,10 +422,6 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                 GoogleMap(
                   onMapCreated: (GoogleMapController controller) async {
                     _mapController = controller;
-                    // if (isDark) {
-                    //   controller.setMapStyle(_darkMapStyle);
-                    // }
-
                     await Future.delayed(Duration(milliseconds: 500));
                     if (_workerLocation != null) {
                       controller.animateCamera(
@@ -319,17 +434,16 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                     zoom: 13.0,
                   ),
                   markers: _markers,
+                  circles: _circles,
                   myLocationEnabled: false,
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   onTap: (_) => _hideTaskCard(),
-
-                  // ✅ تفعيل التقريب والتبعيد اليدوي
                   scrollGesturesEnabled: true,
-                  zoomGesturesEnabled: true, // ← مهم جداً!
-                  rotateGesturesEnabled: true, // ← مهم!
-                  tiltGesturesEnabled: false, // ← false لتسهيل التحكم
+                  zoomGesturesEnabled: true,
+                  rotateGesturesEnabled: true,
+                  tiltGesturesEnabled: false,
                 ),
                 Positioned(
                   top: 16,
@@ -354,13 +468,13 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.work_outline,
+                          Icons.assignment,
                           color: ThemeColors.primaryColor,
                           size: 20,
                         ),
                         SizedBox(width: 8),
                         Text(
-                          '${_availableTasks.length} tâches disponibles',
+                          '${_filteredTasks.length} tâches disponibles',
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -399,9 +513,19 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                       ),
                       SizedBox(height: 8),
                       FloatingActionButton(
-                        onPressed: _loadTasks,
+                        onPressed: _isLoadingLocation ? null : _onRefresh,
                         backgroundColor: ThemeColors.primaryColor,
-                        child: Icon(Icons.refresh, color: Colors.white),
+                        child: _isLoadingLocation
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : Icon(Icons.refresh, color: Colors.white),
                         mini: true,
                       ),
                     ],
@@ -413,169 +537,255 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
   }
 
   Widget _buildTaskDetailsCard(bool isDark) {
-    return Container(
-      color: Colors.black.withOpacity(0.5),
-      child: Center(
-        child: Container(
-          margin: EdgeInsets.all(24),
-          padding: EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark ? ThemeColors.darkCardBackground : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 20,
-                offset: Offset(0, 10),
+    return GestureDetector(
+      onTap: _hideTaskCard,
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
+        child: Center(
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: 24, vertical: 50),
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7),
+              decoration: BoxDecoration(
+                color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 30,
+                    offset: Offset(0, 15),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _selectedTask!.isUrgent
-                            ? Colors.red.withOpacity(0.1)
-                            : ThemeColors.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: _selectedTask!.isUrgent
+                            ? [Colors.red.withOpacity(0.8), Colors.red]
+                            : [
+                                ThemeColors.primaryColor.withOpacity(0.8),
+                                ThemeColors.primaryColor
+                              ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: Icon(
-                        _getCategoryIcon(_selectedTask!.serviceType),
-                        color: _selectedTask!.isUrgent
-                            ? Colors.red
-                            : ThemeColors.primaryColor,
-                        size: 24,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _getCategoryIcon(_selectedTask!.serviceType),
+                            color: _selectedTask!.isUrgent
+                                ? Colors.red
+                                : ThemeColors.primaryColor,
+                            size: 28,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_selectedTask!.isUrgent)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.red,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'URGENT',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              SizedBox(height: 4),
+                              Text(
+                                _selectedTask!.title,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _hideTaskCard,
+                          icon: Icon(Icons.close, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Content
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (_selectedTask!.isUrgent)
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'URGENT',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          _buildInfoCard(Icons.location_on, 'Adresse',
+                              _selectedTask!.location, isDark),
+                          SizedBox(height: 12),
+                          _buildInfoCard(Icons.access_time, 'Horaire',
+                              _selectedTask!.preferredTime, isDark),
+                          SizedBox(height: 12),
+                          _buildInfoCard(Icons.schedule, 'Publié',
+                              _formatTimeAgo(_selectedTask!.createdAt), isDark),
+                          if (_selectedTask!.distance != null) ...[
+                            SizedBox(height: 12),
+                            _buildInfoCard(Icons.directions, 'Distance',
+                                _calculateDistance(_selectedTask!), isDark),
+                          ],
+                          SizedBox(height: 20),
+                          Text(
+                            'Description',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? ThemeColors.darkSurface
+                                  : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.grey[800]!
+                                    : Colors.grey[200]!,
+                                width: 1,
                               ),
                             ),
-                          SizedBox(height: 4),
-                          Text(
-                            _selectedTask!.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.white : Colors.black,
+                            child: Text(
+                              _selectedTask!.description,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color:
+                                    isDark ? Colors.white70 : Colors.grey[700],
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 20),
+                          Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  ThemeColors.successColor.withOpacity(0.1),
+                                  ThemeColors.successColor.withOpacity(0.05),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    ThemeColors.successColor.withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.payments,
+                                    color: ThemeColors.successColor, size: 24),
+                                SizedBox(width: 8),
+                                Text(
+                                  '${_selectedTask!.budget} MRU',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: ThemeColors.successColor,
+                                  ),
                                 ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: _hideTaskCard,
-                      icon: Icon(Icons.close, color: Colors.grey),
+                  ),
+
+                  // Bottom Actions
+                  Container(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? ThemeColors.darkSurface : Colors.grey[50],
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 16),
-                _buildDetailRow(context, Icons.location_on, 'Adresse',
-                    _selectedTask!.location, isDark),
-                SizedBox(height: 8),
-                _buildDetailRow(context, Icons.access_time, 'Horaire',
-                    _selectedTask!.preferredTime, isDark),
-                SizedBox(height: 8),
-                _buildDetailRow(context, Icons.schedule, 'Publié',
-                    _formatTimeAgo(_selectedTask!.createdAt), isDark),
-                if (_selectedTask!.distance != null) ...[
-                  SizedBox(height: 8),
-                  _buildDetailRow(context, Icons.directions, 'Distance',
-                      _calculateDistance(_selectedTask!), isDark),
+                    child: Row(
+                      children: [
+                        Expanded(
+                            flex: 1,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                print(
+                                    '▶️ Postuler button pressed, selectedTask=$_selectedTask');
+
+                                if (_selectedTask == null) {
+                                  print(
+                                      '⚠️ Postuler pressed but _selectedTask is null');
+                                  return;
+                                }
+
+                                try {
+                                  _showApplicationDialog(_selectedTask!);
+                                } catch (e, stack) {
+                                  print(
+                                      '❌ Error in _showApplicationDialog: $e');
+                                  print(stack);
+                                }
+                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_circle, size: 18),
+                                  SizedBox(width: 6),
+                                  Text('Postuler'),
+                                ],
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
                 ],
-                SizedBox(height: 16),
-                Text(
-                  'Description',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                ),
-                SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark ? ThemeColors.darkSurface : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _selectedTask!.description,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isDark ? Colors.white70 : Colors.grey[700],
-                          height: 1.4,
-                        ),
-                  ),
-                ),
-                SizedBox(height: 20),
-                Row(
-                  children: [
-                    Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: ThemeColors.successColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_selectedTask!.budget} MRU',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: ThemeColors.successColor,
-                        ),
-                      ),
-                    ),
-                    Spacer(),
-                    ElevatedButton(
-                      onPressed: () => _showApplicationDialog(_selectedTask!),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ThemeColors.primaryColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.send, size: 16),
-                          SizedBox(width: 8),
-                          Text('Postuler'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -583,34 +793,61 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, IconData icon, String label,
-      String value, bool isDark) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: ThemeColors.primaryColor),
-        SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? Colors.white70 : Colors.grey[600],
-                fontSize: 14,
-              ),
+  Widget _buildInfoCard(
+      IconData icon, String label, String value, bool isDark) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? ThemeColors.darkSurface : Colors.grey[50],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          width: 1,
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black,
-                  fontSize: 14,
-                ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: ThemeColors.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: ThemeColors.primaryColor),
           ),
-        ),
-      ],
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   void _showApplicationDialog(TaskModel task) {
+    print('🟢 _showApplicationDialog called for task: ${task.id}');
+
     final TextEditingController messageController = TextEditingController();
     messageController.text = "Bonjour, je suis disponible pour cette mission.";
 
@@ -712,8 +949,7 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 3,
                                   valueColor: AlwaysStoppedAnimation(
-                                    ThemeColors.primaryColor,
-                                  ),
+                                      ThemeColors.primaryColor),
                                 ),
                               ),
                             )
@@ -797,6 +1033,8 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     setDialogState(true);
 
     try {
+      print('🟢 _submitApplicationFromMap ENTERED');
+
       print('📤 Sending application from map for task: ${task.id}');
 
       final result = await taskService.applyToTask(
@@ -806,65 +1044,31 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
 
       print('📥 API Response: $result');
 
-      // ✅ أغلق Dialog التقديم أولاً
+      // ✅ إغلاق dialog التقديم
+
       if (Navigator.canPop(dialogContext)) {
         Navigator.pop(dialogContext);
       }
 
-      if (!mounted) return;
+      // ⏱️ انتظار صغير للتأكد من إغلاق Dialog
 
-      // ✅ أغلق Task Card
-      _hideTaskCard();
-
-      // ✅ انتظر قليلاً قبل عرض Success Dialog
       await Future.delayed(Duration(milliseconds: 100));
 
-      if (result['ok'] == true) {
-        // ✅ نجاح
-        if (mounted) {
-          SuccessDialog.show(
-            context,
-            title: 'SUCCESS!',
-            message: 'Votre candidature a été envoyée avec succès.',
-            isSuccess: true,
-            onDone: () {
-              _loadTasks();
-            },
-          );
-        }
-      } else {
-        // ✅ تحقق من الخطأ
-        final errorMsg = result['error']?.toString() ?? '';
+      if (!mounted) return;
 
-        if (errorMsg.contains('déjà') ||
-            errorMsg.contains('already') ||
-            errorMsg.toLowerCase().contains('existe')) {
-          // ✅ تقدم من قبل
-          if (mounted) {
-            SuccessDialog.show(
-              context,
-              title: 'Déjà postulé',
-              message: 'Vous avez déjà postulé pour cette mission.',
-              isSuccess: false,
-            );
-          }
-        } else {
-          // ✅ خطأ عادي
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(errorMsg.isNotEmpty ? errorMsg : 'Erreur inconnue'),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            );
-          }
-        }
-      }
+      // 🎯 الآن عرض النتيجة
+
+      print('⚠️ About to call handleApplyResult'); // ← للتحقق
+
+      handleApplyResult(
+        context,
+        result,
+        onSuccessDone: () {
+          _loadTasks();
+
+          _hideTaskCard();
+        },
+      );
     } catch (e) {
       print('❌ Error: $e');
 
@@ -889,31 +1093,133 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen> {
     }
   }
 
-  static const String _darkMapStyle = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#242f3e"
+  Future<void> _contactClient(TaskModel task) async {
+    // _hideTaskCard();
+
+    print('══════════════════════════════════');
+    print('📋 Task Details:');
+    print('   Task ID: ${task.id}');
+    print('   Task Title: ${task.title}');
+    print('   Client ID: ${task.clientId}');
+    print('   Client ID Type: ${task.clientId.runtimeType}');
+    print('══════════════════════════════════');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(child: CircularProgressIndicator()),
+    );
+
+    print('📤 Calling chatService.startConversation(${task.clientId})');
+
+    final result = await chatService.startConversation(task.clientId);
+
+    print('📥 Chat Service Response:');
+    print('   Full result: $result');
+    print('   Success: ${result['ok']}');
+    print('   Conversation ID: ${result['conversation_id']}');
+    print('   Error: ${result['error']}');
+    print('   Status Code: ${result['status']}');
+
+    // ✅ إضافة Debug جديد
+    print('🔍 DEBUG - Checking result:');
+    print('   result type: ${result.runtimeType}');
+    print('   result keys: ${result.keys}');
+    print('   conversation_id value: ${result['conversation_id']}');
+    print('   conversation_id type: ${result['conversation_id']?.runtimeType}');
+    print('   conversation_id == null? ${result['conversation_id'] == null}');
+    print('   conversation_id != null? ${result['conversation_id'] != null}');
+    print('══════════════════════════════════');
+
+    if (!mounted) {
+      print('⚠️ Widget not mounted - returning');
+      return;
+    }
+
+    Navigator.pop(context);
+    print('✅ Dialog closed');
+
+    if (result['conversation_id'] != null) {
+      print('✅ Entering navigation block...');
+      print('   Mounted: $mounted');
+      print('   Context: $context');
+
+      if (!mounted) {
+        print('⚠️ Widget not mounted after check - returning');
+        return;
       }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#746855"
+
+      print('🚀 About to push ChatScreen...');
+
+      try {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) {
+              print('🏗️ Building ChatScreen...');
+              return ChatScreen(
+                conversationId: result['conversation_id'],
+                contactName: 'Client',
+                contactId: task.clientId,
+                isOnline: false,
+                profileImageUrl: null,
+              );
+            },
+          ),
+        );
+        print('✅ Navigation completed');
+      } catch (e) {
+        print('❌ Navigation error: $e');
       }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#242f3e"
+    } else {
+      print('❌ conversation_id is null - showing error');
+
+      final errorMessage = (result['error'] ?? '').toString().toLowerCase();
+      final statusCode = result['status'];
+
+      String displayMessage;
+
+      if (statusCode == 403 ||
+          errorMessage.contains('block') ||
+          errorMessage.contains('bloqué') ||
+          errorMessage.contains('forbidden')) {
+        displayMessage =
+            'Vous ne pouvez pas discuter avec un utilisateur bloqué';
+      } else {
+        displayMessage =
+            result['error'] ?? 'Erreur lors du démarrage de la conversation';
       }
-    ]
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 28),
+              SizedBox(width: 12),
+              Text('Erreur', style: TextStyle(fontSize: 18)),
+            ],
+          ),
+          content:
+              Text(displayMessage, style: TextStyle(fontSize: 15, height: 1.5)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK',
+                  style:
+                      TextStyle(fontSize: 16, color: ThemeColors.primaryColor)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ✅✅✅ لا تضيفي شيئاً هنا!
+    // سيتم إغلاق الـ card من الـ OutlinedButton نفسه!
   }
-]''';
 }

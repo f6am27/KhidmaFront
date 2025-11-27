@@ -642,6 +642,7 @@ class _TaskCandidatesScreenState extends State<TaskCandidatesScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white.withOpacity(0.85),
         title: Text('Accepter le candidat'),
         content:
             Text('Voulez-vous accepter ${candidate.name} pour cette mission ?'),

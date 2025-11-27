@@ -5,6 +5,11 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../services/chat_service.dart';
 import '../../../models/conversation_model.dart';
 import 'chat_screen.dart';
+import '../../../core/storage/token_storage.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../../core/config/api_config.dart';
+import '../../../services/auth_manager.dart';
 
 class MessagesListScreen extends StatefulWidget {
   @override
@@ -19,10 +24,12 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
 
   bool isLoading = true;
   String? errorMessage;
+  String? myProfileImageUrl;
 
   @override
   void initState() {
     super.initState();
+    _loadMyProfile();
     _loadConversations();
   }
 
@@ -30,6 +37,94 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMyProfile() async {
+    try {
+      print('🔄 Loading my profile...');
+
+      final userData = await TokenStorage.readUserData();
+
+      final userRole = userData?['role'] as String?;
+
+      print('👤 User role: $userRole');
+
+      final token = await AuthManager.getValidAccessToken();
+
+      if (token == null) {
+        print('❌ No valid token');
+
+        return;
+      }
+
+      String? imageUrl;
+
+      if (userRole == 'worker') {
+        // ✅ للعامل
+
+        final response = await http.get(
+          Uri.parse('${ApiConfig.baseUrl()}/worker-profile/'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        print('📡 Worker Profile API response: ${response.statusCode}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          if (data['profile_image'] != null) {
+            final imagePath = data['profile_image'] as String;
+
+            final baseUrl = ApiConfig.baseUrl().replaceAll('/api/users', '');
+
+            imageUrl = '$baseUrl$imagePath';
+
+            print('✅ Worker image URL: $imageUrl');
+          }
+        }
+      } else if (userRole == 'client') {
+        // ✅ للعميل
+
+        final response = await http.get(
+          Uri.parse('${ApiConfig.baseUrl()}/client-profile/'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        print('📡 Client Profile API response: ${response.statusCode}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          if (data['profile_image'] != null) {
+            final imagePath = data['profile_image'] as String;
+
+            final baseUrl = ApiConfig.baseUrl().replaceAll('/api/users', '');
+
+            imageUrl = '$baseUrl$imagePath';
+
+            print('✅ Client image URL: $imageUrl');
+          } else {
+            print('⚠️ Client has no profile image');
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          myProfileImageUrl = imageUrl;
+        });
+      }
+
+      print('✅ My profile image loaded: $myProfileImageUrl');
+    } catch (e) {
+      print('❌ Error loading profile: $e');
+    }
   }
 
   Future<void> _loadConversations() async {
@@ -425,10 +520,10 @@ class _MessagesListScreenState extends State<MessagesListScreen> {
           contactId: conversation.otherParticipant.id ?? 0,
           isOnline: conversation.otherParticipant.isOnline,
           profileImageUrl: conversation.otherParticipant.profileImageUrl,
+          myProfileImageUrl: myProfileImageUrl,
         ),
       ),
     ).then((_) {
-      // إعادة تحميل المحادثات عند العودة
       _loadConversations();
     });
   }

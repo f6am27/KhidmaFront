@@ -550,6 +550,10 @@ class _WorkerSettingsScreenState extends State<WorkerSettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Paramètres'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(

@@ -17,7 +17,7 @@ class SuccessDialog {
         child: Container(
           padding: EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Colors.white.withOpacity(0.85),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(

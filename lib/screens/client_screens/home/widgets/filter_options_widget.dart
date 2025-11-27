@@ -177,44 +177,8 @@ class FilterOptionsWidget extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bool isActive = selectedArea != 'Toutes Zones';
 
-    return PopupMenuButton<String>(
-      onSelected: (value) {
-        Map<String, String> newFilters = {
-          'priceSort': priceSort,
-          'ratingSort': ratingSort,
-          'distanceSort': distanceSort,
-          'selectedArea': value,
-        };
-        onFilterChanged(newFilters);
-      },
-      itemBuilder: (context) {
-        return nouakchottAreas.map((area) {
-          final bool selected = area == selectedArea;
-          return PopupMenuItem<String>(
-            value: area,
-            child: Row(
-              children: [
-                if (selected)
-                  Icon(Icons.check, size: 16, color: ThemeColors.primaryColor),
-                if (selected) SizedBox(width: 8),
-                Text(
-                  area,
-                  style: TextStyle(
-                    color: selected
-                        ? ThemeColors.primaryColor
-                        : (isDark ? ThemeColors.darkTextPrimary : Colors.black),
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList();
-      },
-      elevation: 4,
-      offset: const Offset(0, 8),
-      color: isDark ? ThemeColors.darkCardBackground : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return GestureDetector(
+      onTap: () => _showAreaBottomSheet(context),
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -249,7 +213,7 @@ class FilterOptionsWidget extends StatelessWidget {
             ),
             SizedBox(width: 6),
             Text(
-              'Zone',
+              isActive ? selectedArea : 'Zone',
               style: TextStyle(
                 color: isActive
                     ? Colors.white
@@ -257,6 +221,8 @@ class FilterOptionsWidget extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             SizedBox(width: 4),
             Icon(
@@ -269,6 +235,154 @@ class FilterOptionsWidget extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+// ✅ دالة جديدة لعرض قائمة المناطق
+  void _showAreaBottomSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ✅ مقبض السحب
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[700] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+
+              // ✅ العنوان
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Sélectionner une zone',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark
+                          ? ThemeColors.darkTextPrimary
+                          : ThemeColors.lightTextPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+
+              // ✅ قائمة المناطق
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: nouakchottAreas.length,
+                  itemBuilder: (context, index) {
+                    final area = nouakchottAreas[index];
+                    final isSelected = area == selectedArea;
+
+                    return GestureDetector(
+                      onTap: () {
+                        Map<String, String> newFilters = {
+                          'priceSort': priceSort,
+                          'ratingSort': ratingSort,
+                          'distanceSort': distanceSort,
+                          'selectedArea': area,
+                        };
+                        onFilterChanged(newFilters);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        margin: EdgeInsets.only(bottom: 8),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? ThemeColors.primaryColor.withOpacity(0.1)
+                              : (isDark
+                                  ? ThemeColors.darkSurface
+                                  : Colors.grey[50]),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? ThemeColors.primaryColor
+                                : (isDark
+                                    ? Colors.grey[800]!
+                                    : Colors.grey[200]!),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 20,
+                              color: isSelected
+                                  ? ThemeColors.primaryColor
+                                  : (isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600]),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                area,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? ThemeColors.primaryColor
+                                      : (isDark
+                                          ? ThemeColors.darkTextPrimary
+                                          : ThemeColors.lightTextPrimary),
+                                ),
+                              ),
+                            ),
+                            if (isSelected)
+                              Icon(
+                                Icons.check_circle,
+                                color: ThemeColors.primaryColor,
+                                size: 22,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -380,64 +494,110 @@ class FilterOptionsWidget extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? ThemeColors.darkBackground : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
         return Container(
-          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? ThemeColors.darkCardBackground : Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Trier par',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark
-                      ? ThemeColors.darkTextPrimary
-                      : ThemeColors.lightTextPrimary,
+              // ✅ مقبض السحب
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[700] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-              SizedBox(height: 16),
-              _buildSortOption(context, 'Prix croissant', priceSort == 'asc',
-                  () {
-                Map<String, String> filters = {
-                  'priceSort': 'asc',
-                  'ratingSort': 'none',
-                  'distanceSort': 'none',
-                  'selectedArea': selectedArea,
-                };
-                onFilterChanged(filters);
-                Navigator.pop(context);
-              }),
-              _buildSortOption(context, 'Prix décroissant', priceSort == 'desc',
-                  () {
-                Map<String, String> filters = {
-                  'priceSort': 'desc',
-                  'ratingSort': 'none',
-                  'distanceSort': 'none',
-                  'selectedArea': selectedArea,
-                };
-                onFilterChanged(filters);
-                Navigator.pop(context);
-              }),
-              _buildSortOption(context, 'Meilleure note', ratingSort == 'desc',
-                  () {
-                Map<String, String> filters = {
-                  'priceSort': 'none',
-                  'ratingSort': 'desc',
-                  'distanceSort': 'none',
-                  'selectedArea': selectedArea,
-                };
-                onFilterChanged(filters);
-                Navigator.pop(context);
-              }),
-              _buildSortOption(
+              SizedBox(height: 20),
+
+              // ✅ العنوان
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Trier par',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark
+                          ? ThemeColors.darkTextPrimary
+                          : ThemeColors.lightTextPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+
+              // ✅ الخيارات
+              _buildModernSortOption(
                 context,
-                'Distance croissante (le plus proche)',
+                'Prix croissant',
+                Icons.arrow_upward,
+                priceSort == 'asc',
+                () {
+                  Map<String, String> filters = {
+                    'priceSort': 'asc',
+                    'ratingSort': 'none',
+                    'distanceSort': 'none',
+                    'selectedArea': selectedArea,
+                  };
+                  onFilterChanged(filters);
+                  Navigator.pop(context);
+                },
+              ),
+              _buildModernSortOption(
+                context,
+                'Prix décroissant',
+                Icons.arrow_downward,
+                priceSort == 'desc',
+                () {
+                  Map<String, String> filters = {
+                    'priceSort': 'desc',
+                    'ratingSort': 'none',
+                    'distanceSort': 'none',
+                    'selectedArea': selectedArea,
+                  };
+                  onFilterChanged(filters);
+                  Navigator.pop(context);
+                },
+              ),
+              _buildModernSortOption(
+                context,
+                'Meilleure note',
+                Icons.star,
+                ratingSort == 'desc',
+                () {
+                  Map<String, String> filters = {
+                    'priceSort': 'none',
+                    'ratingSort': 'desc',
+                    'distanceSort': 'none',
+                    'selectedArea': selectedArea,
+                  };
+                  onFilterChanged(filters);
+                  Navigator.pop(context);
+                },
+              ),
+              _buildModernSortOption(
+                context,
+                'Le plus proche',
+                Icons.near_me,
                 distanceSort == 'asc',
                 isLocationLoading
                     ? null
@@ -453,16 +613,37 @@ class FilterOptionsWidget extends StatelessWidget {
                       },
                 showLocationIndicator: isLocationLoading,
               ),
-              _buildSortOption(context, 'Réinitialiser', false, () {
-                Map<String, String> filters = {
-                  'priceSort': 'none',
-                  'ratingSort': 'none',
-                  'distanceSort': 'none',
-                  'selectedArea': selectedArea,
-                };
-                onFilterChanged(filters);
-                Navigator.pop(context);
-              }),
+
+              SizedBox(height: 8),
+              Divider(color: isDark ? Colors.grey[800] : Colors.grey[200]),
+              SizedBox(height: 8),
+
+              // ✅ زر إعادة التعيين
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Map<String, String> filters = {
+                      'priceSort': 'none',
+                      'ratingSort': 'none',
+                      'distanceSort': 'none',
+                      'selectedArea': selectedArea,
+                    };
+                    onFilterChanged(filters);
+                    Navigator.pop(context);
+                  },
+                  icon: Icon(Icons.refresh, size: 18),
+                  label: Text('Réinitialiser'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ThemeColors.primaryColor,
+                    side: BorderSide(color: ThemeColors.primaryColor),
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -470,9 +651,11 @@ class FilterOptionsWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildSortOption(
+// ✅ دالة جديدة للخيارات الحديثة
+  Widget _buildModernSortOption(
     BuildContext context,
     String title,
+    IconData icon,
     bool isSelected,
     VoidCallback? onTap, {
     bool showLocationIndicator = false,
@@ -482,52 +665,75 @@ class FilterOptionsWidget extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(vertical: 12),
+        margin: EdgeInsets.only(bottom: 8),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? ThemeColors.primaryColor.withOpacity(0.1)
+              : (isDark ? ThemeColors.darkSurface : Colors.grey[50]),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? ThemeColors.primaryColor
+                : (isDark ? Colors.grey[800]! : Colors.grey[200]!),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
         child: Row(
           children: [
-            if (showLocationIndicator) ...[
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
-                ),
-              ),
-              SizedBox(width: 12),
-              Text(
-                'Obtention de la position...',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: ThemeColors.primaryColor,
-                ),
-              ),
-            ] else ...[
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
+            // ✅ الأيقونة
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
                 color: isSelected
                     ? ThemeColors.primaryColor
-                    : (isDark
-                        ? ThemeColors.darkTextSecondary
-                        : Colors.grey[400]),
+                    : (isDark ? Colors.grey[800] : Colors.grey[200]),
+                borderRadius: BorderRadius.circular(8),
               ),
-              SizedBox(width: 12),
-              Text(
-                title,
+              child: showLocationIndicator
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(
+                          isSelected ? Colors.white : ThemeColors.primaryColor,
+                        ),
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      size: 18,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                    ),
+            ),
+            SizedBox(width: 12),
+
+            // ✅ النص
+            Expanded(
+              child: Text(
+                showLocationIndicator ? 'Obtention de la position...' : title,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 15,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected
                       ? ThemeColors.primaryColor
                       : (isDark
                           ? ThemeColors.darkTextPrimary
-                          : Colors.grey[700]),
+                          : ThemeColors.lightTextPrimary),
                 ),
               ),
-            ],
+            ),
+
+            // ✅ علامة الاختيار
+            if (isSelected && !showLocationIndicator)
+              Icon(
+                Icons.check_circle,
+                color: ThemeColors.primaryColor,
+                size: 22,
+              ),
           ],
         ),
       ),

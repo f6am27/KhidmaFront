@@ -258,6 +258,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ],
+
+        // ✅✅✅ إضافة مؤشر Online (نسخة طبق الأصل من Worker) ✅✅✅
+        if (_clientProfile!.isOnline) ...[
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'En ligne',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        // ✅✅✅ نهاية الإضافة ✅✅✅
       ],
     );
   }
@@ -285,27 +319,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               _clientProfile?.totalTasksPublished.toString() ?? '0',
               'Demandes\nPubliées',
-              Icons.work_outline),
+              Icons.assignment_outlined, // أيقونة للمهام المنشورة
+              Colors.green), // لون مخصص
           _buildDivider(context),
           _buildStatItem(
               context,
               _clientProfile?.totalTasksCompleted.toString() ?? '0',
               'Services\nTerminés',
-              Icons.check_circle_outline),
+              Icons.verified, // أيقونة المهام المكتملة (مهمة + صح)
+              Colors.green), // لون أخضر للإشارة للإنجاز
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(
-      BuildContext context, String number, String label, IconData icon) {
+  Widget _buildStatItem(BuildContext context, String number, String label,
+      IconData icon, Color iconColor) {
     return Expanded(
       child: Column(
         children: [
           Icon(
             icon,
-            size: 24,
-            color: ThemeColors.primaryColor,
+            size: 28, // حجم أكبر قليلاً
+            color: iconColor,
           ),
           SizedBox(height: 8),
           Text(
@@ -580,6 +616,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+            _buildThemeSettingsItem(context),
             _buildSettingsItem(
               context: context,
               icon: Icons.notifications_outlined,

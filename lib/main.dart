@@ -11,7 +11,6 @@ import 'core/theme/app_themes.dart';
 // استيراد Firebase Service
 import 'services/firebase_service.dart';
 
-// الشاشات
 import 'screens/authentication_screens/splash_screen.dart';
 import 'screens/authentication_screens/welcome_screen.dart';
 import 'screens/authentication_screens/registration_type_screen.dart';
@@ -22,7 +21,7 @@ import 'screens/authentication_screens/worker_onboarding_screen.dart';
 import 'screens/authentication_screens/forgot_password_screen.dart';
 import 'screens/authentication_screens/reset_password_screen.dart';
 import 'screens/authentication_screens/registration_screen.dart';
-
+import 'services/auth_manager.dart';
 // الويدجتس والطرق
 import 'routes/app_routes.dart';
 
@@ -51,7 +50,41 @@ void main() async {
   );
 }
 
-class MicroEmploiApp extends StatelessWidget {
+class MicroEmploiApp extends StatefulWidget {
+  @override
+  _MicroEmploiAppState createState() => _MicroEmploiAppState();
+}
+
+class _MicroEmploiAppState extends State<MicroEmploiApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this); // ✅ مراقبة حالة التطبيق
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // ✅ إيقاف المراقبة
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // ✅ عند تغيير حالة التطبيق
+    if (state == AppLifecycleState.resumed) {
+      // التطبيق أصبح نشط (في المقدمة)
+      print('📱 App resumed - setting online');
+      AuthManager.updateOnlineStatus(true);
+    } else if (state == AppLifecycleState.paused) {
+      // التطبيق في الخلفية
+      print('📱 App paused - setting offline');
+      AuthManager.updateOnlineStatus(false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(

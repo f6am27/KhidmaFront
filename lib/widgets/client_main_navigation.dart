@@ -180,7 +180,13 @@ class _ClientMainNavigationState extends State<ClientMainNavigation> {
         clipBehavior: Clip.none,
         children: [
           Container(
-            padding: EdgeInsets.symmetric(vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: isSelected
+                  ? ThemeColors.primaryColor.withOpacity(0.1)
+                  : Colors.transparent,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -214,7 +220,7 @@ class _ClientMainNavigationState extends State<ClientMainNavigation> {
           // Badge
           if (badge > 0)
             Positioned(
-              right: 8,
+              right: 18,
               top: 0,
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),

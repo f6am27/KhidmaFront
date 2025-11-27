@@ -60,13 +60,7 @@ class WorkerLocationPermissionScreen extends StatelessWidget {
 
   // التنقل للشاشة الرئيسية
   void _navigateToHome(BuildContext context) {
-    // إعادة بناء HomeRouter ليعرض WorkerMainNavigation
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/home',
-      (route) => false,
-      arguments: {'role': 'worker'},
-    );
+    Navigator.of(context).pop(); // ✅ مجرد إغلاق شاشة الـ Permission
   }
 
   // دالة للتحقق من الحاجة لعرض الشاشة

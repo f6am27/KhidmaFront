@@ -484,6 +484,37 @@ class ChatService {
   void dispose() {
     _client.close();
   }
+
+  // ==========================================
+// 10. تحديث حالة المستخدم (Online/Offline)
+// POST /api/chat/update-status/
+// ==========================================
+  Future<Map<String, dynamic>> updateOnlineStatus(bool isOnline) async {
+    try {
+      String endpoint = '$_baseUrl/update-status/';
+
+      final body = {'is_online': isOnline};
+
+      final headers = await _headers;
+
+      final response = await _client.post(
+        Uri.parse(endpoint),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Status updated: $isOnline');
+        return {'ok': true, 'is_online': isOnline};
+      } else {
+        print('⚠️ Status update failed: ${response.statusCode}');
+        return {'ok': false, 'error': 'Failed to update status'};
+      }
+    } catch (e) {
+      print('❌ Error updating status: $e');
+      return {'ok': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
 }
 
 // Singleton instance

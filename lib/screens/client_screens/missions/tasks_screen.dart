@@ -684,37 +684,220 @@ class _TasksScreenState extends State<TasksScreen>
         reviewText: comment.isEmpty ? null : comment,
       );
 
+      // ✅ أزل الـ loading أولاً
       loadingOverlay?.remove();
+
+      // ✅ انتظر قليلاً قبل عرض أي Dialog
+      await Future.delayed(Duration(milliseconds: 100));
 
       if (!mounted) return;
 
       if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Évaluation envoyée avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // ✅ عرض Success Dialog
+        _showReviewSuccessDialog();
         _loadTasks();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erreur'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        final errorMsg = result['error'] ?? 'Erreur';
+
+        // ✅ تحقق من أنه تم التقييم مسبقاً
+        if (errorMsg.toLowerCase().contains('déjà') ||
+            errorMsg.toLowerCase().contains('already') ||
+            errorMsg.toLowerCase().contains('existe')) {
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 80,
+                      color: Colors.orange,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Déjà évalué',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2D2D2D),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Vous avez déjà évalué ce prestataire pour cette tâche.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF666666),
+                        height: 1.5,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(50),
+                          ),
+                        ),
+                        child: Text(
+                          'Compris',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(child: Text(errorMsg)),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: EdgeInsets.all(16),
+            ),
+          );
+        }
       }
     } catch (e) {
       loadingOverlay?.remove();
+      await Future.delayed(Duration(milliseconds: 100)); // ✅ أضفت هذا
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.white, size: 24),
+                SizedBox(width: 12),
+                Expanded(child: Text('Erreur: $e')),
+              ],
+            ),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: EdgeInsets.all(16),
           ),
         );
       }
     }
+  }
+
+  void _showReviewSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.7),
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ✅ أيقونة النجاح
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Icon(
+                    Icons.check_circle,
+                    size: 80,
+                    color: Colors.green,
+                  ),
+                ],
+              ),
+              SizedBox(height: 24),
+              Text(
+                'Merci pour votre avis !',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D2D2D),
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Votre évaluation a été envoyée avec succès.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF666666),
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThemeColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                  ),
+                  child: Text(
+                    'D\'accord',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _cancelTask(TaskModel task) {
@@ -762,6 +945,10 @@ class _TasksScreenState extends State<TasksScreen>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white.withOpacity(0.85),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: Row(
           children: [
             Icon(Icons.payment, color: ThemeColors.primaryColor),
@@ -984,6 +1171,10 @@ class _TasksScreenState extends State<TasksScreen>
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white.withOpacity(0.85),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: Row(
           children: [
             Icon(Icons.payment, color: Colors.green),
@@ -995,8 +1186,6 @@ class _TasksScreenState extends State<TasksScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.money, color: Colors.green, size: 48),
-              SizedBox(height: 16),
               Text(
                 'Avez-vous payé en espèces au prestataire ?',
                 textAlign: TextAlign.center,
@@ -1250,29 +1439,8 @@ class _TasksScreenState extends State<TasksScreen>
         builder: (context) => Container(
           color: Colors.black54,
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
-                ),
-                SizedBox(height: 16),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Confirmation du paiement...\n${finalPrice.toStringAsFixed(0)} MRU',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(ThemeColors.primaryColor),
             ),
           ),
         ),
@@ -1292,47 +1460,87 @@ class _TasksScreenState extends State<TasksScreen>
 
       loadingOverlay?.remove();
 
-      // ⏳ التأخير بعد إزالة Loading
       await Future.delayed(Duration(milliseconds: 100));
 
       if (!mounted) return;
 
       if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
+        // ✅ عرض Dialog النجاح بشفافية 0.85
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white.withOpacity(0.85),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 24),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Tâche confirmée avec succès !',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                // أيقونة النجاح
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: 60,
+                  ),
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Paiement Confirmé',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Le paiement a été enregistré avec succès',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Montant: ${finalPrice.toStringAsFixed(0)} MRU',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+                SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Montant payé : ${finalPrice.toStringAsFixed(0)} MRU',
-                        style: TextStyle(fontSize: 13),
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      'OK',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: EdgeInsets.all(16),
           ),
         );
 
@@ -1504,82 +1712,193 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _rateWorker(TaskModel task) {
     int selectedRating = 5;
-    String comment = '';
+    final TextEditingController commentController = TextEditingController();
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.7),
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.star, color: Colors.amber),
-              SizedBox(width: 8),
-              Text('Évaluer le prestataire'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setState) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Stack(
               children: [
-                if (task.assignedProvider != null) ...[
-                  Text(
-                    task.assignedProvider!,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                ],
-                Text(
-                  'Votre note:',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    return IconButton(
-                      icon: Icon(
-                        index < selectedRating ? Icons.star : Icons.star_border,
-                        size: 40,
-                        color: Colors.amber,
+                SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: 24),
+
+                      // ✅ العنوان مع إيموجي النجوم في العيون
+                      Text(
+                        '🤩',
+                        style: TextStyle(fontSize: 48),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          selectedRating = index + 1;
-                        });
-                      },
-                    );
-                  }),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Commentaire (optionnel):',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                      SizedBox(height: 12),
+                      Text(
+                        'Laissez votre avis',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2D2D2D),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          task.title,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Color(0xFF666666),
+                          ),
+                        ),
+                      ),
+                      if (task.assignedProvider != null) ...[
+                        SizedBox(height: 4),
+                        Text(
+                          'Prestataire: ${task.assignedProvider!}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: ThemeColors.primaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: 24),
+
+                      // ✅ النجوم
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                selectedRating = index + 1;
+                              });
+                            },
+                            child: Container(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(
+                                index < selectedRating
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                size: 44,
+                                color: Color(0xFFFFA726), // أصفر ذهبي
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      SizedBox(height: 24),
+
+                      // ✅ حقل التعليق
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Color(0xFFE0E0E0),
+                              width: 1,
+                            ),
+                          ),
+                          child: TextField(
+                            controller: commentController,
+                            maxLines: 4,
+                            maxLength: 500,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF2D2D2D),
+                            ),
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Partagez votre expérience avec ce prestataire...',
+                              hintStyle: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFFAAAAAA),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.all(16),
+                              counterStyle: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF999999),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 24),
+
+                      // ✅ زر الإرسال
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              _submitReview(
+                                task,
+                                selectedRating,
+                                commentController.text.trim(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ThemeColors.primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                            ),
+                            child: Text(
+                              'Envoyer l\'avis',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: 8),
-                TextField(
-                  onChanged: (value) => comment = value,
-                  maxLines: 4,
-                  maxLength: 500,
-                  decoration: InputDecoration(
-                    hintText: 'Partagez votre expérience...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: ThemeColors.primaryColor,
-                        width: 2,
+
+                // ✅ زر X في الزاوية العلوية اليمنى
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(dialogContext),
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close,
+                        size: 20,
+                        color: Color(0xFF666666),
                       ),
                     ),
                   ),
@@ -1587,25 +1906,11 @@ class _TasksScreenState extends State<TasksScreen>
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                _submitReview(task, selectedRating, comment.trim());
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ThemeColors.primaryColor,
-              ),
-              child: Text('Envoyer', style: TextStyle(color: Colors.white)),
-            ),
-          ],
         ),
       ),
-    );
+    ).then((_) {
+      commentController.dispose();
+    });
   }
 
   void _rateService(TaskModel task) {

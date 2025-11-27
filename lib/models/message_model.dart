@@ -9,6 +9,9 @@ class MessageModel {
   final DateTime createdAt;
   final DateTime? readAt;
   final String timeAgo;
+  final String formattedTime;
+  final String formattedDate;
+  final String dateKey;
 
   MessageModel({
     required this.id,
@@ -19,6 +22,9 @@ class MessageModel {
     required this.createdAt,
     this.readAt,
     required this.timeAgo,
+    required this.formattedTime,
+    required this.formattedDate,
+    required this.dateKey,
   });
 
   // من JSON (من الباك إند)
@@ -32,6 +38,9 @@ class MessageModel {
       createdAt: DateTime.parse(json['created_at']),
       readAt: json['read_at'] != null ? DateTime.parse(json['read_at']) : null,
       timeAgo: json['time_ago'] ?? '',
+      formattedTime: json['formatted_time'] ?? '',
+      formattedDate: json['formatted_date'] ?? '',
+      dateKey: json['date_key'] ?? '',
     );
   }
 
@@ -46,6 +55,9 @@ class MessageModel {
       'created_at': createdAt.toIso8601String(),
       'read_at': readAt?.toIso8601String(),
       'time_ago': timeAgo,
+      'formatted_time': formattedTime,
+      'formatted_date': formattedDate,
+      'date_key': dateKey
     };
   }
 
@@ -59,6 +71,9 @@ class MessageModel {
     DateTime? createdAt,
     DateTime? readAt,
     String? timeAgo,
+    String? formattedTime,
+    String? formattedDate,
+    String? dateKey,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -69,11 +84,13 @@ class MessageModel {
       createdAt: createdAt ?? this.createdAt,
       readAt: readAt ?? this.readAt,
       timeAgo: timeAgo ?? this.timeAgo,
+      formattedTime: formattedTime ?? this.formattedTime,
+      formattedDate: formattedDate ?? this.formattedDate,
+      dateKey: dateKey ?? this.dateKey,
     );
   }
 }
 
-// نموذج معلومات المستخدم (مشترك مع conversation_model)
 class UserProfileModel {
   final int id;
   final String fullName;

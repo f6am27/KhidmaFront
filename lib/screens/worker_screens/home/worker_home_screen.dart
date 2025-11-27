@@ -10,6 +10,7 @@ import '../../../services/auth_manager.dart';
 import '../../../core/config/api_config.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../shared_screens/dialogs/success_dialog.dart';
+import '../../../utils/apply_helper.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -596,9 +597,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
             ? ThemeColors.darkCardBackground
             : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: isUrgent
-            ? Border.all(color: AppColors.orange.withOpacity(0.3), width: 1)
-            : null,
+        border: isUrgent ? Border.all(color: Colors.red, width: 2.5) : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -634,15 +633,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.orange.withOpacity(0.1),
+                          color: Colors.red.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red,
+                            width: 2,
+                          ),
                         ),
                         child: Text(
                           'URGENT',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.orange,
+                            color: Colors.red,
                           ),
                         ),
                       ),
@@ -660,21 +663,32 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${task.distance?.toStringAsFixed(1) ?? '?'} km',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.green,
+              if (task.distance != null) // ✅ فقط إذا كان هناك مسافة حقيقية
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!locationService.isLocationFresh) ...[
+                        Icon(Icons.schedule, size: 12, color: Colors.orange),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        '${task.distance!.toStringAsFixed(1)} km',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.green,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -711,42 +725,31 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => _showApplicationDialog(task),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPurple,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.person_add, color: Colors.white, size: 14),
-                          const SizedBox(width: 6),
-                        ],
-                      ),
-                    ),
+              GestureDetector(
+                onTap: () => _showApplicationDialog(task),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryPurple,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? ThemeColors.darkCardBackground.withOpacity(0.5)
-                          : Colors.grey[100]!,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.chat_bubble_outline,
-                      color: AppColors.primaryPurple,
-                      size: 16,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_add, color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Postuler',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
               Text(
                 '${task.budget} MRU',
@@ -999,68 +1002,29 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
 
       print('📥 API Response: $result');
 
-      // ✅ أغلق Dialog التقديم أولاً
+      // ✅ أغلق Dialog باستخدام dialogContext
       if (Navigator.canPop(dialogContext)) {
-        Navigator.pop(dialogContext);
+        Navigator.of(dialogContext).pop();
       }
 
       if (!mounted) return;
 
-      if (result['ok'] == true) {
-        // ✅ نجاح
-        await Future.delayed(Duration(milliseconds: 100)); // ← مهم للانتظار!
+      // ✅ انتظر قليلاً
+      await Future.delayed(Duration(milliseconds: 150));
 
-        if (mounted) {
-          SuccessDialog.show(
-            context,
-            title: 'SUCCESS!',
-            message: 'Votre candidature a été envoyée avec succès.',
-            isSuccess: true,
-            onDone: () {
-              _loadTasks();
-            },
-          );
-        }
-      } else {
-        // ✅ تحقق من الخطأ
-        final errorMsg = result['error']?.toString() ?? '';
-
-        if (errorMsg.contains('déjà') ||
-            errorMsg.contains('already') ||
-            errorMsg.toLowerCase().contains('existe')) {
-          // ✅ تقدم من قبل
-          await Future.delayed(Duration(milliseconds: 100));
-
-          if (mounted) {
-            SuccessDialog.show(
-              context,
-              title: 'Déjà postulé',
-              message: 'Vous avez déjà postulé pour cette mission.',
-              isSuccess: false,
-            );
-          }
-        } else {
-          // ✅ خطأ عادي
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(errorMsg.isNotEmpty ? errorMsg : 'Erreur inconnue'),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
-          }
-        }
-      }
+      // ✅ استخدام الدالة الموحدة - سطر واحد فقط!
+      handleApplyResult(
+        context,
+        result,
+        onSuccessDone: () {
+          _loadTasks();
+        },
+      );
     } catch (e) {
       print('❌ Error: $e');
 
       if (Navigator.canPop(dialogContext)) {
-        Navigator.pop(dialogContext);
+        Navigator.of(dialogContext).pop();
       }
 
       if (mounted) {
@@ -1068,10 +1032,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           SnackBar(
             content: Text('Erreur: ${e.toString()}'),
             backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
           ),
         );
       }
@@ -1210,7 +1170,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // ✅ مهم جداً
       builder: (context) => Container(
+        height: MediaQuery.of(context).size.height *
+            0.60, // ✅ ارتفاع ثابت 60% من الشاشة
         decoration: BoxDecoration(
           color: Theme.of(context).brightness == Brightness.dark
               ? ThemeColors.darkCardBackground
@@ -1222,7 +1185,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min, // ✅ اتركيه min
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -1245,67 +1208,77 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               ],
             ),
             const SizedBox(height: 16),
-            _buildSearchOption(
-              icon: Icons.work_outline,
-              title: 'Ma catégorie',
-              subtitle: 'Missions dans votre domaine',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WorkerOpportunitiesScreen(
-                      filterType: 'category',
-                      categoryFilter: null, // ← فقط غيّر إلى null
+            Expanded(
+              // ✅ مهم: يجعل المحتوى يأخذ المساحة المتبقية
+              child: SingleChildScrollView(
+                // ✅ للتمرير إذا كان المحتوى طويلاً
+                child: Column(
+                  children: [
+                    _buildSearchOption(
+                      icon: Icons.work_outline,
+                      title: 'Ma catégorie',
+                      subtitle: 'Missions dans votre domaine',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WorkerOpportunitiesScreen(
+                              filterType: 'category',
+                              categoryFilter: null,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
-            ),
-            _buildSearchOption(
-              icon: Icons.location_on_outlined,
-              title: 'Plus proches',
-              subtitle: 'Triées par distance croissante',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        WorkerOpportunitiesScreen(filterType: 'distance'),
-                  ),
-                );
-              },
-            ),
-            _buildSearchOption(
-              icon: Icons.attach_money,
-              title: 'Prix croissant',
-              subtitle: 'Du moins cher au plus cher',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        WorkerOpportunitiesScreen(filterType: 'price'),
-                  ),
-                );
-              },
-            ),
-            _buildSearchOption(
-              icon: Icons.map_outlined,
-              title: 'Par région',
-              subtitle: 'Groupées par zones',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        WorkerOpportunitiesScreen(filterType: 'region'),
-                  ),
-                );
-              },
+                    _buildSearchOption(
+                      icon: Icons.location_on_outlined,
+                      title: 'Plus proches',
+                      subtitle: 'Triées par distance croissante',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WorkerOpportunitiesScreen(
+                                filterType: 'distance'),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildSearchOption(
+                      icon: Icons.attach_money,
+                      title: 'Prix croissant',
+                      subtitle: 'Du moins cher au plus cher',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                WorkerOpportunitiesScreen(filterType: 'price'),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildSearchOption(
+                      icon: Icons.map_outlined,
+                      title: 'Par région',
+                      subtitle: 'Groupées par zones',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                WorkerOpportunitiesScreen(filterType: 'region'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

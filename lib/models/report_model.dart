@@ -8,7 +8,7 @@ class ReportModel {
   final String? description;
   final String? status;
   final DateTime? createdAt;
-  final DateTime? resolvedAt; // ✅ إضافة
+  final DateTime? resolvedAt;
 
   ReportModel({
     this.id,
@@ -18,15 +18,14 @@ class ReportModel {
     this.description,
     this.status,
     this.createdAt,
-    this.resolvedAt, // ✅ إضافة
+    this.resolvedAt,
   });
 
-  // من JSON (من الباك إند)
   factory ReportModel.fromJson(Map<String, dynamic> json) {
     return ReportModel(
-      id: json['id'] as int?, // ✅ إصلاح
-      reportedUserId: json['reported_user_id'] as int? ?? 0, // ✅ إصلاح
-      conversationId: json['conversation_id'] as int?, // ✅ إصلاح
+      id: json['id'] as int?,
+      reportedUserId: json['reported_user_id'] as int? ?? 0,
+      conversationId: json['conversation_id'] as int?,
       reason: json['reason'] ?? '',
       description: json['description'],
       status: json['status'],
@@ -39,7 +38,6 @@ class ReportModel {
     );
   }
 
-  // إلى JSON (لإرسال للباك إند)
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
@@ -54,23 +52,21 @@ class ReportModel {
   }
 }
 
-// أسباب التبليغ (نفس الكود السابق)
+// ✅ أسباب التبليغ المحدثة
 class ReportReasons {
-  static const String inappropriateContent = 'inappropriate_content';
+  // ❌ تم حذف inappropriateContent
+  static const String scamFraud = 'scam_fraud'; // ✅ الآن هو الأول
   static const String harassment = 'harassment';
-  static const String scamFraud = 'scam_fraud';
   static const String spam = 'spam';
   static const String fakeProfile = 'fake_profile';
   static const String other = 'other';
 
   static String getDisplayName(String reason) {
     switch (reason) {
-      case inappropriateContent:
-        return 'Contenu inapproprié';
-      case harassment:
-        return 'Harcèlement';
       case scamFraud:
         return 'Arnaque/Fraude';
+      case harassment:
+        return 'Harcèlement';
       case spam:
         return 'Spam';
       case fakeProfile:
@@ -84,12 +80,10 @@ class ReportReasons {
 
   static String getDescription(String reason) {
     switch (reason) {
-      case inappropriateContent:
-        return 'Ce contenu ne respecte pas nos conditions d\'utilisation';
-      case harassment:
-        return 'Cette personne me harcèle ou intimide';
       case scamFraud:
         return 'Je pense que c\'est une tentative d\'arnaque';
+      case harassment:
+        return 'Cette personne me harcèle ou intimide';
       case spam:
         return 'Messages répétitifs ou non sollicités';
       case fakeProfile:
@@ -103,12 +97,10 @@ class ReportReasons {
 
   static String getIcon(String reason) {
     switch (reason) {
-      case inappropriateContent:
-        return 'warning';
-      case harassment:
-        return 'person_remove';
       case scamFraud:
         return 'security';
+      case harassment:
+        return 'person_remove';
       case spam:
         return 'block';
       case fakeProfile:
@@ -120,25 +112,20 @@ class ReportReasons {
     }
   }
 
+  // ✅ القائمة المحدثة - scamFraud أولاً وبدون inappropriateContent
   static List<Map<String, String>> getAllReasons() {
     return [
       {
-        'value': inappropriateContent,
-        'label': getDisplayName(inappropriateContent),
-        'description': getDescription(inappropriateContent),
-        'icon': getIcon(inappropriateContent),
+        'value': scamFraud,
+        'label': getDisplayName(scamFraud),
+        'description': getDescription(scamFraud),
+        'icon': getIcon(scamFraud),
       },
       {
         'value': harassment,
         'label': getDisplayName(harassment),
         'description': getDescription(harassment),
         'icon': getIcon(harassment),
-      },
-      {
-        'value': scamFraud,
-        'label': getDisplayName(scamFraud),
-        'description': getDescription(scamFraud),
-        'icon': getIcon(scamFraud),
       },
       {
         'value': spam,
