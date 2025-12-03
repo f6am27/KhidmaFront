@@ -6,16 +6,20 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../shared_screens/messages/chat_screen.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../models/task_counter_model.dart';
+import '../../../shared_screens/dialogs/subscription_prompt_dialog.dart';
 
 class WorkerCardWidget extends StatefulWidget {
-  final WorkerSearchResult worker; // ✅ تغيير من Map إلى Model
+  final WorkerSearchResult worker;
+  final TaskCounterModel? taskCounter; // ← جديد
   final VoidCallback? onPhoneCall;
   final VoidCallback? onChat;
-  final VoidCallback? onFavoriteChanged; // ✅ callback عند تغيير favorite
+  final VoidCallback? onFavoriteChanged;
 
   const WorkerCardWidget({
     Key? key,
     required this.worker,
+    this.taskCounter, // ← جديد
     this.onPhoneCall,
     this.onChat,
     this.onFavoriteChanged,
@@ -165,11 +169,21 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
   }
 
   Future<void> _makePhoneCall() async {
+    // ✅ فحص الاشتراك أولاً
+    if (widget.taskCounter?.needsSubscription == true) {
+      await SubscriptionPromptDialog.show(
+        context,
+        role: 'client',
+        tasksUsed: widget.taskCounter!.tasksUsed,
+        tasksRemaining: widget.taskCounter!.tasksRemaining,
+        errorMessage: 'Vous devez vous abonner pour contacter des prestataires',
+      );
+      return;
+    }
+
     // إزالة + وكود الدولة 222
-    String cleanPhone = widget.worker.phone
-        .replaceAll('+', '')
-        .replaceAll('222', '')
-        .trim(); // ✅ نفس التعديل
+    String cleanPhone =
+        widget.worker.phone.replaceAll('+', '').replaceAll('222', '').trim();
 
     final phoneNumber = 'tel://$cleanPhone';
 
@@ -207,6 +221,19 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
   }
 
   Future<void> _openChat(BuildContext context) async {
+    // ✅ فحص الاشتراك أولاً
+    if (widget.taskCounter?.needsSubscription == true) {
+      await SubscriptionPromptDialog.show(
+        context,
+        role: 'client',
+        tasksUsed: widget.taskCounter!.tasksUsed,
+        tasksRemaining: widget.taskCounter!.tasksRemaining,
+        errorMessage:
+            'Vous devez vous abonner pour discuter avec des prestataires',
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -490,7 +517,9 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
                 padding: EdgeInsets.all(4),
                 child: Icon(
                   Icons.phone,
-                  color: ThemeColors.successColor,
+                  color: widget.taskCounter?.needsSubscription == true
+                      ? Colors.grey // ← رمادي عند القفل
+                      : ThemeColors.successColor,
                   size: 20,
                 ),
               ),
@@ -502,7 +531,9 @@ class _WorkerCardWidgetState extends State<WorkerCardWidget> {
                 padding: EdgeInsets.all(4),
                 child: Icon(
                   Icons.chat_bubble_outline,
-                  color: ThemeColors.primaryColor,
+                  color: widget.taskCounter?.needsSubscription == true
+                      ? Colors.grey // ← رمادي عند القفل
+                      : ThemeColors.primaryColor,
                   size: 20,
                 ),
               ),

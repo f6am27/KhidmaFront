@@ -16,6 +16,9 @@ import '../../../models/nouakchott_area_model.dart';
 import '../../../services/location_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'widgets/filter_options_widget.dart';
+import '../../../services/payment_service.dart';
+import '../../../models/task_counter_model.dart';
+import '../../shared_screens/dialogs/subscription_prompt_dialog.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   static const Color primaryPurple = Color(0xFF6366F1);
@@ -28,6 +31,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   // Services
   final WorkerSearchService _searchService = WorkerSearchService();
   final FavoriteWorkersService _favoriteService = FavoriteWorkersService();
+
+// Task Counter state
+  TaskCounterModel? _taskCounter;
+  bool _isLoadingCounter = false;
+  final PaymentService _paymentService = PaymentService();
 
   // Search & Filter states
   String searchQuery = '';
@@ -56,7 +64,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-
   @override
   void initState() {
     super.initState();
@@ -68,8 +75,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       }
     });
     _loadInitialData();
+    _loadTaskCounter();
 
-    // ✅ عند العودة للشاشة، حدّث البيانات
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshFavoriteStates();
     });
@@ -86,6 +93,33 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       _loadFilters(),
       _loadTopWorkers(),
     ]);
+  }
+
+  /// ✅ جلب عداد المهام
+  Future<void> _loadTaskCounter() async {
+    setState(() {
+      _isLoadingCounter = true;
+    });
+
+    try {
+      final result = await _paymentService.checkTaskLimit();
+
+      if (result['ok']) {
+        setState(() {
+          _taskCounter = result['counter'] as TaskCounterModel;
+          _isLoadingCounter = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingCounter = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading task counter: $e');
+      setState(() {
+        _isLoadingCounter = false;
+      });
+    }
   }
 
   /// ✅ جلب الفلاتر (Categories + Areas)
@@ -725,78 +759,88 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: _isLoadingFilters
-            ? Center(
-                child: CircularProgressIndicator(
-                  color: ThemeColors.primaryColor,
-                ),
-              )
-            : SingleChildScrollView(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(isDark),
-                    SizedBox(height: 24),
-                    SearchBarWidget(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      onSearch: _performSearch,
-                      onFilterTap: isSearchActive
-                          ? _showFiltersBottomSheet
-                          : null, // ✅ هنا الحل
-                      onSearchActiveChanged: (isActive) {
-                        setState(() {
-                          isSearchActive = isActive;
-                        });
-                      },
-                      onSearchChanged: (value) {
-                        setState(() {
-                          searchQuery = value;
-                        });
-                      },
-                    ),
-                    SizedBox(height: 16), // ✅ التصنيفات فقط
-                    if (isSearchActive)
-                      CategorySelectorWidget(
-                        categories: categories,
-                        selectedCategory: selectedCategory,
-                        onCategorySelected: _onCategorySelected,
+        child: Column(
+          children: [
+            // ✅ Banner عداد المهام
+            if (_taskCounter != null && !_isLoadingCounter)
+              _buildTaskCounterBanner(),
+
+            // ✅ باقي المحتوى
+            Expanded(
+              child: _isLoadingFilters
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: ThemeColors.primaryColor,
                       ),
-                    SizedBox(height: 32),
-                    if (!isSearchActive) ...[
-                      _buildCategoriesSection(isDark),
-                      SizedBox(height: 32),
-                    ],
-                    _buildResultsSection(isDark),
-                    SizedBox(height: 16),
-                    if (_isLoadingWorkers)
-                      Center(
-                        child: CircularProgressIndicator(
-                          color: ThemeColors.primaryColor,
-                        ),
-                      )
-                    else if (_errorMessage != null)
-                      _buildErrorState(isDark)
-                    else if (workers.isEmpty)
-                      _buildEmptyState(isDark)
-                    else
-                      ...workers
-                          .map((worker) => WorkerCardWidget(
-                                worker: worker,
-                                onFavoriteChanged: () {
-                                  // ✅ عند تغيير المفضلة، أعد تحميل البيانات
-                                  _searchWorkers();
-                                },
-                                onPhoneCall: null,
-                                onChat: () {
-                                  _openChat(worker);
-                                },
-                              ))
-                          .toList(),
-                  ],
-                ),
-              ),
+                    )
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeader(isDark),
+                          SizedBox(height: 24),
+                          SearchBarWidget(
+                            controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            onSearch: _performSearch,
+                            onFilterTap:
+                                isSearchActive ? _showFiltersBottomSheet : null,
+                            onSearchActiveChanged: (isActive) {
+                              setState(() {
+                                isSearchActive = isActive;
+                              });
+                            },
+                            onSearchChanged: (value) {
+                              setState(() {
+                                searchQuery = value;
+                              });
+                            },
+                          ),
+                          SizedBox(height: 16),
+                          if (isSearchActive)
+                            CategorySelectorWidget(
+                              categories: categories,
+                              selectedCategory: selectedCategory,
+                              onCategorySelected: _onCategorySelected,
+                            ),
+                          SizedBox(height: 32),
+                          if (!isSearchActive) ...[
+                            _buildCategoriesSection(isDark),
+                            SizedBox(height: 32),
+                          ],
+                          _buildResultsSection(isDark),
+                          SizedBox(height: 16),
+                          if (_isLoadingWorkers)
+                            Center(
+                              child: CircularProgressIndicator(
+                                color: ThemeColors.primaryColor,
+                              ),
+                            )
+                          else if (_errorMessage != null)
+                            _buildErrorState(isDark)
+                          else if (workers.isEmpty)
+                            _buildEmptyState(isDark)
+                          else
+                            ...workers
+                                .map((worker) => WorkerCardWidget(
+                                      worker: worker,
+                                      taskCounter: _taskCounter, // ← جديد
+                                      onFavoriteChanged: () {
+                                        _searchWorkers();
+                                      },
+                                      onPhoneCall: null,
+                                      onChat: () {
+                                        _openChat(worker);
+                                      },
+                                    ))
+                                .toList(),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1158,10 +1202,95 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
+  Widget _buildTaskCounterBanner() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tasksRemaining = _taskCounter!.tasksRemaining;
+    final tasksUsed = _taskCounter!.tasksUsed;
+    final needsSubscription = _taskCounter!.needsSubscription;
+
+    Color bannerColor;
+    IconData bannerIcon;
+    String bannerText;
+
+    if (needsSubscription) {
+      // 🔒 Limite atteinte
+      bannerColor = Colors.red;
+      bannerIcon = Icons.lock;
+      bannerText =
+          'Limite atteinte ($tasksUsed/5) - Abonnement requis (8 MRU/mois)';
+    } else if (tasksRemaining == 1) {
+      // ⚠️ Dernière tâche
+      bannerColor = Colors.orange;
+      bannerIcon = Icons.warning_amber;
+      bannerText = 'Attention: Il vous reste 1 tâche gratuite';
+    } else if (tasksRemaining <= 2) {
+      // ⚠️ 2 tâches restantes
+      bannerColor = Colors.orange.shade300;
+      bannerIcon = Icons.info_outline;
+      bannerText = 'Il vous reste $tasksRemaining tâches gratuites';
+    } else {
+      // ✅ Normal
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: isDark ? ThemeColors.darkSurface : Colors.grey[100],
+        child: Row(
+          children: [
+            Icon(Icons.task_alt, color: Colors.green, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Tâches gratuites: $tasksRemaining/5',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: isDark ? ThemeColors.darkTextPrimary : Colors.grey[800],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: needsSubscription
+          ? () async {
+              await SubscriptionPromptDialog.show(
+                context,
+                role: 'client',
+                tasksUsed: tasksUsed,
+                tasksRemaining: tasksRemaining,
+              );
+              _loadTaskCounter();
+            }
+          : null,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        color: bannerColor.withOpacity(0.15),
+        child: Row(
+          children: [
+            Icon(bannerIcon, color: bannerColor, size: 20),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                bannerText,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: bannerColor,
+                ),
+              ),
+            ),
+            if (needsSubscription)
+              Icon(Icons.arrow_forward_ios, color: bannerColor, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(bool isDark) {
     return Center(
       child: Text(
-        'Home',
+        'Accueil',
         style: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.bold,

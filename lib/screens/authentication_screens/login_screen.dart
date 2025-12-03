@@ -18,13 +18,16 @@ class _LoginScreenState extends State<LoginScreen>
 
   final _formKey = GlobalKey<FormState>();
 
-  // >>> ADD: state
-  final _idController = TextEditingController(); // اسم المستخدم أو الهاتف
+  final _idController = TextEditingController();
   final _passController = TextEditingController();
   bool _loading = false;
-  // <<< END ADD
-
   bool _obscurePassword = true;
+
+  // متغيرات الأخطاء
+  String? _idError;
+  String? _passwordError;
+  final _idFocusNode = FocusNode();
+  final _passFocusNode = FocusNode();
 
   String get _role {
     final args = ModalRoute.of(context)?.settings.arguments as Map?;
@@ -53,10 +56,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _animationController.dispose();
-    // >>> ADD: dispose
     _idController.dispose();
     _passController.dispose();
-    // <<< END ADD
+    _idFocusNode.dispose();
+    _passFocusNode.dispose();
     super.dispose();
   }
 
@@ -225,12 +228,14 @@ class _LoginScreenState extends State<LoginScreen>
                             children: [
                               _buildTextField(
                                 controller: _idController,
-                                hint: 'Téléphone ou Nom d’utilisateur',
+                                focusNode: _idFocusNode,
+                                hint: 'Téléphone ou Nom d\'utilisateur',
                                 icon: Icons.person_outline,
                                 keyboardType: TextInputType.text,
+                                errorText: _idError,
                                 validator: (v) {
                                   if (v == null || v.trim().isEmpty) {
-                                    return 'Veuillez entrer votre téléphone ou nom d’utilisateur';
+                                    return 'Veuillez entrer votre téléphone ou nom d\'utilisateur';
                                   }
                                   return null;
                                 },
@@ -238,9 +243,11 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 20),
                               _buildTextField(
                                 controller: _passController,
+                                focusNode: _passFocusNode,
                                 hint: 'Mot de passe',
                                 icon: Icons.lock_outline,
                                 obscureText: _obscurePassword,
+                                errorText: _passwordError,
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
@@ -256,9 +263,6 @@ class _LoginScreenState extends State<LoginScreen>
                                 validator: (v) {
                                   if (v == null || v.isEmpty) {
                                     return 'Veuillez entrer votre mot de passe';
-                                  }
-                                  if (v.length < 6) {
-                                    return 'Au moins 6 caractères';
                                   }
                                   return null;
                                 },
@@ -286,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   onPressed: _goToRegistration,
                                   child: RichText(
                                     text: TextSpan(
-                                      text: 'Vous n’avez pas de compte ? ',
+                                      text: 'Vous n\'avez pas de compte ? ',
                                       style: AppTextStyles.bodyText.copyWith(
                                         color: AppColors.mediumGray,
                                         fontSize: 14,
@@ -335,59 +339,94 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildTextField({
     required TextEditingController controller,
+    required FocusNode focusNode,
     required String hint,
     required IconData icon,
     TextInputType? keyboardType,
     bool obscureText = false,
     Widget? suffixIcon,
     String? Function(String?)? validator,
+    String? errorText,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.grey[200]!, width: 1),
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        obscureText: obscureText,
-        validator: validator,
-        style: AppTextStyles.bodyText.copyWith(fontSize: 15),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTextStyles.bodyText.copyWith(
-            color: AppColors.mediumGray,
-            fontSize: 14,
-          ),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 20, right: 15),
-            child: Icon(icon, color: AppColors.mediumGray, size: 20),
-          ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 55),
-          suffixIcon: suffixIcon != null
-              ? Padding(
-                  padding: const EdgeInsets.only(right: 15), child: suffixIcon)
-              : null,
-          suffixIconConstraints: const BoxConstraints(minWidth: 45),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: OutlineInputBorder(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
             borderRadius: BorderRadius.circular(25),
-            borderSide: BorderSide(color: AppColors.primaryPurple, width: 2),
+            // احذف الـ border تماماً من هنا
           ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(25),
-            borderSide: BorderSide(color: AppColors.red, width: 1),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(25),
-            borderSide: BorderSide(color: AppColors.red, width: 2),
+          child: TextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: keyboardType,
+            obscureText: obscureText,
+            validator: validator,
+            style: AppTextStyles.bodyText.copyWith(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: AppTextStyles.bodyText.copyWith(
+                color: AppColors.mediumGray,
+                fontSize: 14,
+              ),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 20, right: 15),
+                child: Icon(icon, color: AppColors.mediumGray, size: 20),
+              ),
+              prefixIconConstraints: const BoxConstraints(minWidth: 55),
+              suffixIcon: suffixIcon != null
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 15),
+                      child: suffixIcon)
+                  : null,
+              suffixIconConstraints: const BoxConstraints(minWidth: 45),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: Colors.grey[200]!, width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(
+                  color: errorText != null ? AppColors.red : Colors.grey[200]!,
+                  width: errorText != null ? 2 : 1,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(
+                  color: errorText != null
+                      ? AppColors.red
+                      : AppColors.primaryPurple,
+                  width: 2,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: AppColors.red, width: 2),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: AppColors.red, width: 2),
+              ),
+            ),
           ),
         ),
-      ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 20, top: 6),
+            child: Text(
+              errorText,
+              style: AppTextStyles.bodyText.copyWith(
+                color: AppColors.red,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -411,12 +450,17 @@ class _LoginScreenState extends State<LoginScreen>
         ],
       ),
       child: ElevatedButton(
-        // >>> REPLACE: onPressed of "تسجيل الدخول"
-// في _buildSubmitButton() method، استبدال onPressed:
-
         onPressed: _loading
             ? null
             : () async {
+                _idFocusNode.unfocus();
+                _passFocusNode.unfocus();
+                // مسح الأخطاء السابقة
+                setState(() {
+                  _idError = null;
+                  _passwordError = null;
+                });
+
                 if (!_formKey.currentState!.validate()) return;
 
                 setState(() => _loading = true);
@@ -431,32 +475,26 @@ class _LoginScreenState extends State<LoginScreen>
                     final json = r['json'] ?? {};
                     final user = Map<String, dynamic>.from(json['user'] ?? {});
 
-                    // دور الحساب الذي رجع من الخادم
                     final serverRole = (user['role'] ?? 'client')
                         .toString()
                         .toLowerCase()
                         .trim();
 
-                    // دور البوابة الحالية (واجهة العميل أم العامل؟)
                     final portalRole =
                         (_role == 'prestataire') ? 'worker' : 'client';
 
-                    // ✅ بوابة الدخول: منع دخول العامل من واجهة العميل والعكس
                     if (serverRole != portalRole) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('هذا الحساب غير موجود')),
-                      );
-                      return; // لا نحفظ توكنات ولا ننتقل
+                      setState(() {
+                        _idError = 'Ce compte n\'existe pas';
+                        _passwordError = 'Vérifiez vos informations';
+                      });
+                      return;
                     }
 
-                    // حفظ التوكنات بعد نجاح البوابة
                     await TokenStorage.save(json['access'], json['refresh']);
-
-                    // حفظ بيانات المستخدم
                     await TokenStorage.saveUserData(
                         Map<String, dynamic>.from(user));
 
-                    // التوجيه حسب حالة الـ onboarding
                     final onboardingDone = user['onboarding_completed'] == true;
                     if (serverRole == 'worker' && !onboardingDone) {
                       Navigator.pushReplacementNamed(
@@ -467,8 +505,7 @@ class _LoginScreenState extends State<LoginScreen>
                     } else {
                       if (serverRole == 'worker') {
                         final prefs = await SharedPreferences.getInstance();
-                        await prefs.setInt(
-                            'worker_nav_index', 0); // ← إعادة تعيين للـ Home
+                        await prefs.setInt('worker_nav_index', 0);
                       }
 
                       Navigator.pushReplacementNamed(
@@ -480,47 +517,24 @@ class _LoginScreenState extends State<LoginScreen>
                   } else {
                     final json = r['json'] ?? {};
 
-                    // ✅ تحقق من تعليق الحساب
                     if (json['code'] == 'account_suspended') {
                       _showSuspensionDialog(json);
                       return;
                     }
 
-                    // معالجة الأخطاء الأخرى
-                    String errorMessage = 'بيانات الدخول غير صحيحة';
-
-                    if (json['detail'] != null) {
-                      if (json['detail'] is String) {
-                        errorMessage = json['detail'];
-                      } else if (json['detail'] is Map) {
-                        final details = json['detail'] as Map;
-                        if (details['non_field_errors'] != null) {
-                          errorMessage = details['non_field_errors'][0];
-                        } else if (details['phone_or_username'] != null) {
-                          errorMessage = details['phone_or_username'][0];
-                        } else if (details['password'] != null) {
-                          errorMessage = details['password'][0];
-                        }
-                      }
-                    } else if (json['code'] != null) {
-                      errorMessage = json['code'];
-                    }
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(errorMessage)),
-                    );
+                    setState(() {
+                      _idError = 'Informations de connexion incorrectes';
+                      _passwordError = 'Vérifiez votre mot de passe';
+                    });
                   }
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('حدث خطأ في الاتصال: ${e.toString()}')),
-                  );
+                  setState(() {
+                    _idError = 'Erreur de connexion au serveur';
+                  });
                 } finally {
                   if (mounted) setState(() => _loading = false);
                 }
               },
-
-        // <<< END REPLACE
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -528,14 +542,23 @@ class _LoginScreenState extends State<LoginScreen>
             borderRadius: BorderRadius.circular(25),
           ),
         ),
-        child: const Text(
-          "Se connecter",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        child: _loading
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+            : const Text(
+                "Se connecter",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
       ),
     );
   }

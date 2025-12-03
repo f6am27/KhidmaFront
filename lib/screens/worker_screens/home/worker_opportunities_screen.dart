@@ -33,7 +33,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   String? _errorMessage;
   String selectedSortType = 'none';
   String selectedArea = 'Toutes Zones';
-
+  String? _workerCategory;
   List<TaskModel> get filteredOpportunities {
     List<TaskModel> filtered = List.from(_tasks);
 
@@ -78,7 +78,23 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
         break;
     }
 
+    _loadWorkerCategory(); // ✅ أضيفي هذا السطر
     _loadData();
+  }
+
+  Future<void> _loadWorkerCategory() async {
+    try {
+      final result = await profileService.getWorkerProfile();
+      if (result['ok']) {
+        final workerProfile = result['workerProfile'] as WorkerProfile;
+        setState(() {
+          _workerCategory = workerProfile.serviceCategory;
+        });
+        print('🔎 Worker category loaded: $_workerCategory');
+      }
+    } catch (e) {
+      print('❌ Error loading worker category: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -103,21 +119,6 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       _errorMessage = null;
     });
 
-    // ✅ جلب فئة العامل إذا كان الفلتر حسب الفئة
-    String? category = widget.categoryFilter;
-    if (category == null && widget.filterType == 'category') {
-      try {
-        final result = await profileService.getWorkerProfile();
-        if (result['ok']) {
-          final workerProfile = result['workerProfile'] as WorkerProfile;
-          category = workerProfile.serviceCategory;
-          print('✅ Worker category loaded: $category');
-        }
-      } catch (e) {
-        print('❌ Error loading worker category: $e');
-      }
-    }
-
     String? location = selectedArea != 'Toutes Zones' ? selectedArea : null;
     String? sortBy;
 
@@ -127,24 +128,44 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       sortBy = 'nearest';
     }
 
-    // ← جلب موقع العامل
     LatLng? workerLocation = locationService.currentLocation ??
         await locationService.getLastSavedLocation();
 
+    // ✅ لا نرسل category للـ API، سنفلتر محلياً
     final result = await taskService.getAvailableTasks(
-      category: category,
       location: location,
       sortBy: sortBy,
-      lat: workerLocation?.latitude, // ← جديد
-      lng: workerLocation?.longitude, // ← جديد
-      limit: 10, // ← جديد
+      lat: workerLocation?.latitude,
+      lng: workerLocation?.longitude,
+      limit: 50, // ✅ نجلب عدد أكبر لأننا سنفلتر محلياً
     );
 
     if (mounted) {
       setState(() {
         _isLoading = false;
         if (result['ok']) {
-          _tasks = result['tasks'] as List<TaskModel>;
+          List<TaskModel> allTasks = result['tasks'] as List<TaskModel>;
+
+          // ✅ تطبيق التصفية حسب نوع الفلتر
+          if (_workerCategory != null && _workerCategory!.isNotEmpty) {
+            final workerCat = _workerCategory!.toLowerCase().trim();
+
+            if (widget.filterType == 'category') {
+              // ✅ فلتر "Ma catégorie": مهام التصنيف فقط (بدون غير المصنفة)
+              allTasks = allTasks.where((task) {
+                final taskCat = task.serviceType.toLowerCase().trim();
+                return taskCat == workerCat;
+              }).toList();
+            } else {
+              // ✅ باقي الفلاتر: مهام التصنيف + غير المصنفة
+              allTasks = allTasks.where((task) {
+                final taskCat = task.serviceType.toLowerCase().trim();
+                return taskCat == workerCat || task.isUnclassified;
+              }).toList();
+            }
+          }
+
+          _tasks = allTasks;
         } else {
           _errorMessage = result['error'];
         }
@@ -535,6 +556,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
 
   Widget _buildOpportunityCard(TaskModel task) {
     final isUrgent = task.isUrgent;
+    final isUnclassified = task.isUnclassified;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -556,17 +578,21 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          /// ===== ROW 1 =====
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryPurple.withOpacity(0.1),
+                  color: isUnclassified
+                      ? Colors.orange.withOpacity(0.1)
+                      : AppColors.primaryPurple.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   _getCategoryIcon(task.serviceType),
-                  color: AppColors.primaryPurple,
+                  color:
+                      isUnclassified ? Colors.orange : AppColors.primaryPurple,
                   size: 24,
                 ),
               ),
@@ -580,28 +606,51 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1), // ✅ خلفية حمراء
+                          color: Colors.red.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red, // ✅ حافة حمراء
-                            width: 2, // ✅ سميكة
-                          ),
+                          border: Border.all(color: Colors.red, width: 2),
                         ),
-                        child: Text(
+                        child: const Text(
                           'URGENT',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: Colors.red, // ✅ نص أحمر
+                            color: Colors.red,
                           ),
+                        ),
+                      ),
+                    if (isUnclassified)
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange, width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.help_outline,
+                                size: 12, color: Colors.orange),
+                            SizedBox(width: 4),
+                            Text(
+                              'Non classifié',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange),
+                            ),
+                          ],
                         ),
                       ),
                     const SizedBox(height: 4),
                     Text(
                       task.title,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                         color: Theme.of(context).brightness == Brightness.dark
                             ? ThemeColors.darkTextPrimary
                             : ThemeColors.lightTextPrimary,
@@ -610,7 +659,7 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                   ],
                 ),
               ),
-              if (task.distance != null) // ✅ فقط إذا كان هناك مسافة حقيقية
+              if (task.distance != null)
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -622,7 +671,8 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (!locationService.isLocationFresh) ...[
-                        Icon(Icons.schedule, size: 12, color: Colors.orange),
+                        const Icon(Icons.schedule,
+                            size: 12, color: Colors.orange),
                         const SizedBox(width: 4),
                       ],
                       Text(
@@ -638,27 +688,33 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
                 ),
             ],
           ),
+
           const SizedBox(height: 12),
+
+          /// ===== ROW 2 =====
           Row(
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 16,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? ThemeColors.darkTextSecondary
-                    : ThemeColors.lightTextSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                task.location,
-                style: TextStyle(
-                  fontSize: 13,
+              Icon(Icons.location_on_outlined,
+                  size: 16,
                   color: Theme.of(context).brightness == Brightness.dark
                       ? ThemeColors.darkTextSecondary
-                      : ThemeColors.lightTextSecondary,
+                      : ThemeColors.lightTextSecondary),
+              const SizedBox(width: 4),
+              Expanded(
+                // ✅ أضف Expanded
+                child: Text(
+                  task.location,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis, // ✅ قص النص الطويل
+                  maxLines: 1, // ✅ سطر واحد فقط
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8), // ✅ استبدل Spacer بمسافة ثابتة
               Text(
                 task.preferredTime,
                 style: TextStyle(
@@ -670,43 +726,38 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
               ),
             ],
           ),
+
           const SizedBox(height: 16),
+
+          /// ===== ROW 3 =====
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      print(
-                          '▶️ Opportunités Postuler pressed, task=${task.id}');
-
-                      try {
-                        _showApplicationDialog(task);
-                      } catch (e, stack) {
-                        print('❌ Error opening opportunities apply dialog: $e');
-                        print(stack);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryPurple,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.person_add, color: Colors.white, size: 14),
-                          const SizedBox(width: 6),
-                        ],
-                      ),
-                    ),
+              GestureDetector(
+                onTap: () {
+                  print('▶️ Opportunités Postuler pressed, task=${task.id}');
+                  try {
+                    _showApplicationDialog(task);
+                  } catch (e, stack) {
+                    print('❌ Error opening opportunities apply dialog: $e');
+                    print(stack);
+                  }
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryPurple,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 8),
-                  // const SizedBox(width: 8),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.person_add, color: Colors.white, size: 14),
+                      SizedBox(width: 6),
+                    ],
+                  ),
+                ),
               ),
               Text(
                 '${task.budget} MRU',
@@ -724,6 +775,10 @@ class _WorkerOpportunitiesScreenState extends State<WorkerOpportunitiesScreen> {
   }
 
   IconData _getCategoryIcon(String serviceType) {
+    if (serviceType.toLowerCase() == "non classifié" ||
+        serviceType.toLowerCase() == "non classifie") {
+      return Icons.help_outline; // ✅ علامة استفهام برتقالية
+    }
     switch (serviceType.toLowerCase()) {
       case 'nettoyage':
       case 'nettoyage maison':

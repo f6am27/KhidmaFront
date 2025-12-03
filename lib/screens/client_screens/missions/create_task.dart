@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../../core/theme/theme_colors.dart';
 import '../../../models/models.dart';
 import '../../../services/task_service.dart';
 import '../../../services/category_service.dart';
 import '../../../services/service_category_mapper.dart';
-
+import '../../../services/payment_service.dart';
+import '../../shared_screens/dialogs/subscription_prompt_dialog.dart';
 import '../onboarding/client_location_permission_screen.dart';
 import 'location_picker_screen.dart';
+import 'widgets/saved_locations_screen.dart';
 
 class CreateTaskScreen extends StatefulWidget {
   final TaskModel? taskToEdit;
@@ -27,7 +30,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   late FixedExtentScrollController _hourController;
   late FixedExtentScrollController _minuteController;
 
-  String _selectedServiceType = 'Nettoyage';
+  String _selectedServiceType = '';
   String _selectedLocation = 'Tevragh Zeina';
   int _selectedHour = 9;
   int _selectedMinute = 0;
@@ -42,6 +45,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   List<NouakchottArea> _areas = [];
   bool _isLoadingData = true;
 
+  // Compteur de tâches (soft-lock)
+  int? _tasksUsed;
+  int? _tasksRemaining;
+  bool _needsSubscription = false;
+
   final List<String> _timeDescriptions = [
     'Ce matin',
     'Cet après-midi',
@@ -53,6 +61,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     'Le week-end',
     'Quand vous voulez',
   ];
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +78,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     await Future.wait([
       _loadCategories(),
       _loadAreas(),
+      _loadTaskCounter(), // Charger le compteur pour l’affichage (optionnel)
     ]);
 
     if (widget.taskToEdit != null) {
@@ -85,9 +95,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         _categories = result['categories'] as List<ServiceCategory>;
         ServiceCategoryMapper.initialize(_categories);
 
-        if (_categories.isNotEmpty && _selectedServiceType.isEmpty) {
-          _selectedServiceType = _categories.first.name;
-        }
+        // ✅ السماح بعدم اختيار تصنيف
+// لا نختار تصنيف افتراضي
       });
     }
   }
@@ -105,6 +114,20 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     }
   }
 
+  Future<void> _loadTaskCounter() async {
+    final result = await paymentService.checkTaskLimit();
+    if (!mounted) return;
+
+    if (result['ok'] == true && result['counter'] != null) {
+      final counter = result['counter'];
+      setState(() {
+        _tasksUsed = counter.tasksUsed; // ✅ صحيح
+        _tasksRemaining = counter.tasksRemaining;
+        _needsSubscription = counter.needsSubscription;
+      });
+    }
+  }
+
   void _fillFormWithTaskData() {
     final task = widget.taskToEdit!;
 
@@ -112,7 +135,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     _descriptionController.text = task.description;
     _budgetController.text = task.budget.toString();
 
-    // ✅ استخراج اسم المنطقة بشكل صحيح
+    // ✅ Extraire le nom de la zone
     String locationText = task.location;
 
     if (locationText.contains('(')) {
@@ -126,42 +149,51 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     print('📍 Raw location: ${task.location}');
     print('📍 Extracted location: $_selectedLocation');
 
-    // ✅ أضف هذا الكود الجديد هنا
     if (!_areas.any((area) => area.name == _selectedLocation)) {
       print('⚠️ Location "$_selectedLocation" not found in areas list!');
       print('⚠️ Available areas: ${_areas.map((a) => a.name).toList()}');
 
-      // استخدم أول منطقة كقيمة افتراضية
       if (_areas.isNotEmpty) {
         _selectedLocation = _areas.first.name;
         print('✅ Using default area: $_selectedLocation');
       }
     }
 
-    // ✅ نوع الخدمة - البحث المرن
-    if (_categories.any((cat) => cat.name == task.serviceType)) {
+    // ✅ Type de service - correspondance souple
+// ✅ Type de service - معالجة "Non classifié"
+    if (task.serviceType.toLowerCase() == "non classifié" ||
+        task.serviceType.toLowerCase() == "non classifie") {
+      // ✅ مهمة غير مصنفة
+      _selectedServiceType = '';
+      print('✅ Task is unclassified, serviceType set to empty');
+    } else if (_categories.any((cat) => cat.name == task.serviceType)) {
+      // ✅ تطابق تام
       _selectedServiceType = task.serviceType;
       print('✅ Service type exact match: $_selectedServiceType');
     } else {
+      // ✅ محاولة المطابقة بالكلمة الأولى
       final firstWord = task.serviceType.split(' ').first;
       print(
           '🔍 Trying to match: "${task.serviceType}" → first word: "$firstWord"');
 
-      final match = _categories.firstWhere(
-        (cat) => cat.name.startsWith(firstWord),
-        orElse: () => _categories.isNotEmpty
-            ? _categories.first
-            : throw Exception('No categories loaded'),
-      );
-      _selectedServiceType = match.name;
-      print('✅ Service type matched: "$_selectedServiceType"');
+      try {
+        final match = _categories.firstWhere(
+          (cat) => cat.name.startsWith(firstWord),
+        );
+        _selectedServiceType = match.name;
+        print('✅ Service type matched: "$_selectedServiceType"');
+      } catch (e) {
+        // ✅ إذا لم يُعثر على مطابقة، اتركها غير مصنفة
+        _selectedServiceType = '';
+        print('⚠️ No match found, setting as unclassified');
+      }
     }
 
-    // الاستعجال
+    // Urgence
     _isUrgent = task.isUrgent;
     print('✅ IsUrgent filled: $_isUrgent');
 
-    // الإحداثيات
+    // Coordonnées
     _selectedCoordinates = task.coordinates;
 
     if (task.coordinates != null) {
@@ -169,7 +201,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       _currentLocationAddress = task.location;
     }
 
-    // ملء الوقت
+    // Heure
     if (task.preferredTime.isNotEmpty) {
       try {
         final timeParts = task.preferredTime.trim().split(' ');
@@ -196,7 +228,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       }
     }
 
-    // وصف الوقت
+    // Description du moment
     if (task.timeDescription != null &&
         _timeDescriptions.contains(task.timeDescription)) {
       _selectedTimeDescription = task.timeDescription!;
@@ -214,13 +246,14 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     final isEditing = widget.taskToEdit != null;
 
     return Scaffold(
-      backgroundColor: isDark ? ThemeColors.darkBackground : Color(0xFFF8FAFC),
+      backgroundColor:
+          isDark ? ThemeColors.darkBackground : const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Container(
-            padding: EdgeInsets.all(8),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isDark ? ThemeColors.darkCardBackground : Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -228,13 +261,13 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
                   blurRadius: 8,
-                  offset: Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Icon(
-              Icons.arrow_back_ios_new,
-              size: 18,
+              Icons.arrow_back,
+              size: 25,
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
@@ -253,12 +286,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           if (isEditing && widget.taskToEdit?.status == TaskStatus.published)
             IconButton(
               icon: Container(
-                padding: EdgeInsets.all(8),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.delete, color: Colors.red, size: 18),
+                child: const Icon(Icons.delete, color: Colors.red, size: 18),
               ),
               onPressed: () => _showDeleteConfirmation(),
             ),
@@ -268,56 +301,58 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         key: _formKey,
         child: Column(
           children: [
+            if (!isEditing && _tasksUsed != null && _tasksRemaining != null)
+              _buildCounterBanner(isDark),
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildServiceTypeChips(isDark),
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Titre de la tâche',
                       child: _buildTitleField(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Description',
                       child: _buildDescriptionField(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Budget',
                       child: _buildBudgetField(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Priorité',
                       child: _buildUrgentSwitch(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Localisation',
                       child: _buildLocationSelector(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Horaire',
                       child: _buildTimePicker(isDark),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     _buildModernCard(
                       isDark: isDark,
                       title: 'Quand',
                       child: _buildTimeDescription(isDark),
                     ),
-                    SizedBox(height: 100),
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
@@ -330,6 +365,51 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     );
   }
 
+  Widget _buildCounterBanner(bool isDark) {
+    final remaining = _tasksRemaining ?? 0;
+    final used = _tasksUsed ?? 0;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _needsSubscription
+            ? Colors.red.withOpacity(0.08)
+            : ThemeColors.primaryColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color:
+              _needsSubscription ? Colors.redAccent : ThemeColors.primaryColor,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _needsSubscription ? Icons.lock_outline : Icons.info_outline,
+            color: _needsSubscription
+                ? Colors.redAccent
+                : ThemeColors.primaryColor,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _needsSubscription
+                  ? 'Vous avez atteint la limite de tâches gratuites.'
+                  : 'Vous avez utilisé $used tâche(s). Il vous reste $remaining tâche(s) gratuite(s).',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModernCard({
     required bool isDark,
     required String title,
@@ -337,7 +417,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? ThemeColors.darkCardBackground : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -345,7 +425,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -360,7 +440,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -379,26 +459,85 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-        SizedBox(height: 12),
-        Container(
+        const SizedBox(height: 12),
+        SizedBox(
           height: 100,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: _categories.length,
+            itemCount: _categories.length + 1, // ✅ +1 لخيار "غير مصنف"
             itemBuilder: (context, index) {
-              final category = _categories[index];
+              // ✅ الخيار الأول: "Non classifié"
+              if (index == 0) {
+                final isSelected = _selectedServiceType.isEmpty;
+                return Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedServiceType = ''),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 80,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.orange.withOpacity(0.15)
+                            : (isDark
+                                ? ThemeColors.darkCardBackground
+                                : Colors.white),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? Colors.orange
+                              : Colors.grey.withOpacity(0.3),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.help_outline, // ✅ أيقونة علامة استفهام
+                            color:
+                                isSelected ? Colors.orange : Colors.grey[600],
+                            size: 24,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Non\nclassifié',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.orange
+                                  : (isDark ? Colors.white70 : Colors.black87),
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              fontSize: 10,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // ✅ باقي التصنيفات (index - 1)
+              final category = _categories[index - 1];
+              // final category = _categories[index];
               final isSelected = _selectedServiceType == category.name;
               final serviceColor = _getCategoryColor(category.name);
 
               return Container(
-                margin: EdgeInsets.only(right: 8),
+                margin: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
                   onTap: () =>
                       setState(() => _selectedServiceType = category.name),
                   child: AnimatedContainer(
-                    duration: Duration(milliseconds: 200),
+                    duration: const Duration(milliseconds: 200),
                     width: 80,
-                    padding: EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? serviceColor.withOpacity(0.15)
@@ -421,7 +560,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                           color: isSelected ? serviceColor : Colors.grey[600],
                           size: 24,
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
                           category.name,
                           style: TextStyle(
@@ -464,7 +603,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
-        contentPadding: EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.all(16),
       ),
       style: TextStyle(
         fontSize: 16,
@@ -500,7 +639,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
-        contentPadding: EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.all(16),
       ),
       style: TextStyle(
         fontSize: 16,
@@ -542,7 +681,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
-        contentPadding: EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.all(16),
       ),
       style: TextStyle(
         fontSize: 16,
@@ -581,16 +720,17 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 ),
               ),
               if (_isUrgent) ...[
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
+                    children: const [
                       Icon(Icons.priority_high, color: Colors.red, size: 16),
                       SizedBox(width: 4),
                       Text(
@@ -621,13 +761,62 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Widget _buildLocationSelector(bool isDark) {
     return Column(
       children: [
+        // 🗂️ زر للوصول إلى المواقع المحفوظة
+        GestureDetector(
+          onTap: _openSavedLocationsScreen,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? ThemeColors.darkSurface : Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.grey.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.star,
+                    color: Colors.amber,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Choisir un emplacement fréquent',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey[600],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
         _buildCurrentLocationCard(isDark),
-        SizedBox(height: 16),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(child: Divider(color: Colors.grey[300])),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'OU',
                 style: TextStyle(
@@ -640,7 +829,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             Expanded(child: Divider(color: Colors.grey[300])),
           ],
         ),
-        SizedBox(height: 16),
+        const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _selectedLocation,
           decoration: InputDecoration(
@@ -657,7 +846,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             fillColor: _isUsingCurrentLocation
                 ? Colors.grey[100]
                 : (isDark ? ThemeColors.darkSurface : Colors.grey[50]),
-            contentPadding: EdgeInsets.all(16),
+            contentPadding: const EdgeInsets.all(16),
           ),
           dropdownColor: isDark ? ThemeColors.darkCardBackground : Colors.white,
           style: TextStyle(
@@ -669,7 +858,9 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           onChanged: _isUsingCurrentLocation
               ? null
               : (String? newValue) {
-                  setState(() => _selectedLocation = newValue!);
+                  if (newValue != null) {
+                    setState(() => _selectedLocation = newValue);
+                  }
                 },
           items: _areas.map<DropdownMenuItem<String>>((area) {
             return DropdownMenuItem<String>(
@@ -686,8 +877,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     return GestureDetector(
       onTap: _handleCurrentLocationTap,
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
-        padding: EdgeInsets.all(16),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: _isUsingCurrentLocation
               ? ThemeColors.primaryColor.withOpacity(0.1)
@@ -703,7 +894,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         child: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: _isUsingCurrentLocation
                     ? ThemeColors.primaryColor
@@ -718,7 +909,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 size: 18,
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -755,7 +946,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   }
 
   Widget _buildTimePicker(bool isDark) {
-    return Container(
+    return SizedBox(
       height: 200,
       child: Row(
         children: [
@@ -771,14 +962,14 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Expanded(
                   child: ListWheelScrollView.useDelegate(
                     controller: _hourController,
                     itemExtent: 50,
                     perspective: 0.005,
                     diameterRatio: 1.2,
-                    physics: FixedExtentScrollPhysics(),
+                    physics: const FixedExtentScrollPhysics(),
                     onSelectedItemChanged: (index) {
                       setState(() {
                         _selectedHour = index + 1;
@@ -829,14 +1020,14 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Expanded(
                   child: ListWheelScrollView.useDelegate(
                     controller: _minuteController,
                     itemExtent: 50,
                     perspective: 0.005,
                     diameterRatio: 1.2,
-                    physics: FixedExtentScrollPhysics(),
+                    physics: const FixedExtentScrollPhysics(),
                     onSelectedItemChanged: (index) {
                       setState(() {
                         _selectedMinute = index * 5;
@@ -887,7 +1078,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -895,7 +1086,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                       GestureDetector(
                         onTap: () => setState(() => _isAM = true),
                         child: Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                               vertical: 12, horizontal: 16),
                           decoration: BoxDecoration(
                             color: _isAM
@@ -917,11 +1108,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       GestureDetector(
                         onTap: () => setState(() => _isAM = false),
                         child: Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                               vertical: 12, horizontal: 16),
                           decoration: BoxDecoration(
                             color: !_isAM
@@ -974,7 +1165,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         ),
         filled: true,
         fillColor: isDark ? ThemeColors.darkSurface : Colors.grey[50],
-        contentPadding: EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.all(16),
       ),
       dropdownColor: isDark ? ThemeColors.darkCardBackground : Colors.white,
       style: TextStyle(
@@ -997,7 +1188,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 color: ThemeColors.primaryColor,
                 size: 18,
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Text(
                 description,
                 style: TextStyle(
@@ -1036,7 +1227,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Widget _buildFloatingActionButton(bool isEditing, bool isDark) {
     return Container(
       width: double.infinity,
-      margin: EdgeInsets.symmetric(horizontal: 20),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _submitForm,
@@ -1050,7 +1241,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           shadowColor: ThemeColors.primaryColor.withOpacity(0.3),
         ),
         child: _isLoading
-            ? SizedBox(
+            ? const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
@@ -1062,10 +1253,10 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(isEditing ? Icons.save : Icons.add, size: 20),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
                     isEditing ? 'Sauvegarder' : 'Créer la tâche',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1115,8 +1306,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.location_on, color: Colors.white, size: 20),
-                SizedBox(width: 12),
+                const Icon(Icons.location_on, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text('Position sélectionnée: $address'),
                 ),
@@ -1126,7 +1317,50 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    }
+  }
+
+  // 🗂️ فتح صفحة المواقع المحفوظة
+  void _openSavedLocationsScreen() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SavedLocationsScreen(),
+      ),
+    );
+
+    if (result != null) {
+      final LatLng coordinates = result['coordinates'];
+      final String address = result['address'];
+      final String? name = result['name'];
+
+      setState(() {
+        _isUsingCurrentLocation = true;
+        _currentLocationAddress = name != null ? '$name - $address' : address;
+        _selectedCoordinates = coordinates;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.star, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Emplacement sélectionné: ${name ?? address}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -1138,6 +1372,39 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     return '${_selectedHour.toString().padLeft(2, '0')}:${_selectedMinute.toString().padLeft(2, '0')} $period';
   }
 
+  Future<bool> _checkSoftLockBeforeCreate() async {
+    // Vérification "temps réel" avant la création
+    final result = await paymentService.checkTaskLimit();
+
+    if (result['ok'] == true && result['counter'] != null) {
+      final counter = result['counter'];
+      final needsSubscription = counter.needsSubscription;
+
+      if (needsSubscription) {
+        await SubscriptionPromptDialog.show(
+          context,
+          role: 'client',
+          tasksUsed: counter.tasksUsed,
+          tasksRemaining: counter.tasksRemaining,
+          errorMessage: result['error']?.toString(),
+        );
+        return false;
+      }
+      return true;
+    }
+
+    // En cas d’erreur de réseau, on laisse passer mais on informe l’utilisateur
+    if (mounted && result['error'] != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['error'].toString()),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    return true;
+  }
+
   void _submitForm() async {
     print('🔵 _submitForm called');
 
@@ -1145,11 +1412,29 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       print('❌ Form validation failed');
       return;
     }
+    // ✅ تحذير إذا لم يختر تصنيف
+    if (_selectedServiceType.isEmpty) {
+      final confirmed = await _showUnclassifiedWarning();
+      if (!confirmed) {
+        print('⚠️ User chose to select a category');
+        return;
+      }
+    }
+
+    final isEditing = widget.taskToEdit != null;
+
+    // ✅ Soft-lock : uniquement pour la création, pas pour la modification
+    if (!isEditing) {
+      final allowed = await _checkSoftLockBeforeCreate();
+      if (!allowed) {
+        print('⛔ Création bloquée par la limite de tâches');
+        return;
+      }
+    }
 
     print('✅ Form validation passed');
     setState(() => _isLoading = true);
 
-    final isEditing = widget.taskToEdit != null;
     final String fullLocation =
         _isUsingCurrentLocation && _currentLocationAddress != null
             ? _currentLocationAddress!
@@ -1163,7 +1448,9 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           taskId: widget.taskToEdit!.id,
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim(),
-          serviceType: _selectedServiceType,
+          serviceType: _selectedServiceType.isNotEmpty
+              ? _selectedServiceType
+              : null, // ✅ null إذا فارغ
           budget: int.parse(_budgetController.text),
           location: fullLocation,
           preferredTime: _getFormattedTime(),
@@ -1189,7 +1476,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
 
-        if (result['ok']) {
+        if (result['ok'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(isEditing
@@ -1199,7 +1486,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              margin: EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
             ),
           );
           Navigator.pop(context, true);
@@ -1211,7 +1498,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              margin: EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
             ),
           );
         }
@@ -1226,7 +1513,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -1238,18 +1525,19 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Annuler la tâche'),
-        content: Text(
-            'Êtes-vous sûr de vouloir annuler cette tâche? Cette action est irréversible.'),
+        title: const Text('Annuler la tâche'),
+        content: const Text(
+            'Êtes-vous sûr de vouloir annuler cette tâche ? Cette action est irréversible.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Non'),
+            child: const Text('Non'),
           ),
           ElevatedButton(
             onPressed: () => _performDelete(),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Oui, annuler', style: TextStyle(color: Colors.white)),
+            child: const Text('Oui, annuler',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1259,41 +1547,107 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Future<void> _performDelete() async {
     Navigator.pop(context);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(child: CircularProgressIndicator()),
-    );
-
-    final result = await taskService.updateTaskStatus(
-      taskId: widget.taskToEdit!.id,
-      status: 'cancelled',
-    );
-
+    // L’ancien appel TaskService.updateTaskStatus() n’est plus disponible.
+    // Pour l’instant, on affiche simplement un message.
     if (mounted) {
-      Navigator.pop(context);
-
-      if (result['ok']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Tâche annulée'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: EdgeInsets.all(16),
-          ),
-        );
-        Navigator.pop(context, true);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'Erreur lors de l\'annulation'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'L’annulation de tâche sera bientôt disponible dans la nouvelle version.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
     }
+  }
+
+  Future<bool> _showUnclassifiedWarning() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+                SizedBox(width: 12),
+                Text('Attention'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vous n\'avez pas sélectionné de catégorie.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Votre tâche sera publiée comme "Non classifié", ce qui peut:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                SizedBox(height: 8),
+                _buildWarningItem('⚠️', 'Réduire le nombre de candidatures'),
+                _buildWarningItem('⚠️', 'Rendre la recherche plus difficile'),
+                _buildWarningItem('⚠️', 'Limiter la visibilité'),
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    'Nous vous recommandons de choisir une catégorie appropriée.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.orange[800],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Choisir une catégorie'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Continuer sans catégorie'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Widget _buildWarningItem(String emoji, String text) {
+    return Padding(
+      padding: EdgeInsets.only(left: 8, bottom: 4),
+      child: Row(
+        children: [
+          Text(emoji, style: TextStyle(fontSize: 16)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _getCategoryColor(String categoryName) {

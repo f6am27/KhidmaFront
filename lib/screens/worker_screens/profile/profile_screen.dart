@@ -12,7 +12,6 @@ import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
 import '../../shared_screens/settings/blocked_users_screen.dart';
 import 'widgets/reviews_ratings.dart';
-import '../../shared_screens/payment_history.dart';
 import '../../../core/config/api_config.dart';
 import '../../../services/auth_manager.dart';
 import '../../../routes/app_routes.dart';
@@ -385,21 +384,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ReviewsRatingsScreen(),
-                ),
-              );
-            },
-          ),
-          _buildMenuDivider(context),
-          _buildMenuItem(
-            context: context,
-            icon: Icons.account_balance_wallet_outlined,
-            title: 'Historique des Paiements',
-            subtitle: 'Vos gains et transactions',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PaymentHistoryScreen(),
                 ),
               );
             },

@@ -140,19 +140,26 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen>
     List<TaskModel> tasksWithCoordinates =
         _availableTasks.where((task) => task.coordinates != null).toList();
 
-    // ✅ ثانياً: فلترة حسب الفئة (إذا كانت الفلترة مفعلة)
-    if (!_filterByCategory ||
-        _workerCategory == null ||
-        _workerCategory!.isEmpty) {
-      // بدون فلترة حسب الفئة: إرجاع كل المهام التي لها إحداثيات
+    // ✅ إذا لا يوجد تصنيف للعامل، عرض كل المهام
+    if (_workerCategory == null || _workerCategory!.isEmpty) {
       return tasksWithCoordinates;
     }
 
-    // مع الفلترة: فقط مهام فئة العامل + التي لها إحداثيات
     final workerCat = _workerCategory!.toLowerCase().trim();
+
+    // ✅ إذا كانت الفلترة مفعّلة: مهام تصنيف العامل فقط
+    if (_filterByCategory) {
+      return tasksWithCoordinates.where((task) {
+        final taskCat = task.serviceType.toLowerCase().trim();
+        return taskCat == workerCat;
+      }).toList();
+    }
+
+    // ✅ بدون فلترة: مهام تصنيف العامل + المهام غير المصنفة
     return tasksWithCoordinates.where((task) {
       final taskCat = task.serviceType.toLowerCase().trim();
-      return taskCat == workerCat;
+      // عرض مهام تصنيف العامل أو المهام غير المصنفة
+      return taskCat == workerCat || task.isUnclassified;
     }).toList();
   }
 
@@ -356,28 +363,29 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen>
         actions: [
           // ✅ زر الفلترة حسب الفئة
           if (_workerCategory != null && _workerCategory!.isNotEmpty)
-            Container(
-              margin: EdgeInsets.only(right: 8),
-              child: IconButton(
-                onPressed: () {
-                  setState(() {
-                    _filterByCategory = !_filterByCategory;
-                    _createMarkers(); // إعادة إنشاء العلامات
-                  });
-                },
-                icon: Icon(
-                  _filterByCategory
-                      ? Icons.filter_alt
-                      : Icons.filter_alt_outlined,
-                  color: _filterByCategory
-                      ? ThemeColors.primaryColor
-                      : (isDark ? Colors.white70 : Colors.black54),
+            if (_workerCategory != null && _workerCategory!.isNotEmpty)
+              Container(
+                margin: EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _filterByCategory = !_filterByCategory;
+                      _createMarkers(); // إعادة إنشاء العلامات
+                    });
+                  },
+                  icon: Icon(
+                    _filterByCategory
+                        ? Icons.filter_alt
+                        : Icons.filter_alt_outlined,
+                    color: _filterByCategory
+                        ? ThemeColors.primaryColor
+                        : (isDark ? Colors.white70 : Colors.black54),
+                  ),
+                  tooltip: _filterByCategory
+                      ? 'Afficher ma catégorie + non classifiées'
+                      : 'Filtrer par ma catégorie seulement',
                 ),
-                tooltip: _filterByCategory
-                    ? 'Afficher toutes les tâches'
-                    : 'Filtrer par ma catégorie',
               ),
-            ),
 
           // الزر الأصلي للموقع
           Container(
@@ -1034,7 +1042,6 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen>
 
     try {
       print('🟢 _submitApplicationFromMap ENTERED');
-
       print('📤 Sending application from map for task: ${task.id}');
 
       final result = await taskService.applyToTask(
@@ -1045,27 +1052,23 @@ class _WorkerExploreScreenState extends State<WorkerExploreScreen>
       print('📥 API Response: $result');
 
       // ✅ إغلاق dialog التقديم
-
       if (Navigator.canPop(dialogContext)) {
         Navigator.pop(dialogContext);
       }
 
       // ⏱️ انتظار صغير للتأكد من إغلاق Dialog
-
       await Future.delayed(Duration(milliseconds: 100));
 
       if (!mounted) return;
 
-      // 🎯 الآن عرض النتيجة
-
-      print('⚠️ About to call handleApplyResult'); // ← للتحقق
+      // 🎯 عرض النتيجة مع معالجة Soft Lock
+      print('⚠️ About to call handleApplyResult');
 
       handleApplyResult(
         context,
         result,
         onSuccessDone: () {
           _loadTasks();
-
           _hideTaskCard();
         },
       );

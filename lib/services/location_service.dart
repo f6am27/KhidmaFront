@@ -8,6 +8,7 @@ import 'dart:convert';
 import '../core/config/api_config.dart';
 import 'auth_manager.dart';
 import 'foreground_location_service.dart';
+import '../models/models.dart';
 
 class LocationService {
   static final LocationService _instance = LocationService._internal();
@@ -285,6 +286,188 @@ class LocationService {
       };
     } catch (e) {
       print('❌ Error getting location info: $e');
+      return {
+        'ok': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ✅ إدارة المواقع المحفوظة (Saved Locations)
+  // ════════════════════════════════════════════════════════════
+
+  /// الحصول على قائمة المواقع المحفوظة
+  Future<Map<String, dynamic>> getSavedLocations() async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'GET',
+        endpoint: '${ApiConfig.baseUrl()}/saved-locations/',
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final locations =
+            data.map((json) => SavedLocation.fromJson(json)).toList();
+
+        print('✅ Loaded ${locations.length} saved locations');
+        return {
+          'ok': true,
+          'locations': locations,
+        };
+      } else {
+        print('⚠️ Failed to load saved locations: ${response.statusCode}');
+        return {
+          'ok': false,
+          'error': 'Failed to load locations',
+        };
+      }
+    } on AuthException catch (e) {
+      print('❌ Auth error loading saved locations: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.message,
+        'needsLogin': e.needsLogin,
+      };
+    } catch (e) {
+      print('❌ Error loading saved locations: $e');
+      return {
+        'ok': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// حفظ موقع جديد (أو تحديث موجود)
+  Future<Map<String, dynamic>> saveLocation({
+    required LatLng coordinates,
+    required String address,
+    String? name,
+    String emoji = '📍',
+  }) async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'POST',
+        endpoint: '${ApiConfig.baseUrl()}/saved-locations/create/',
+        body: {
+          'latitude': double.parse(coordinates.latitude.toStringAsFixed(6)),
+          'longitude': double.parse(coordinates.longitude.toStringAsFixed(6)),
+          'address': address,
+          'name': name ?? '',
+          'emoji': emoji,
+        },
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('✅ Location saved: ${data['message']}');
+
+        return {
+          'ok': true,
+          'created': data['created'] ?? false,
+          'location': SavedLocation.fromJson(data['data']),
+        };
+      } else {
+        print('⚠️ Failed to save location: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return {
+          'ok': false,
+          'error': 'Failed to save location',
+        };
+      }
+    } on AuthException catch (e) {
+      print('❌ Auth error saving location: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.message,
+        'needsLogin': e.needsLogin,
+      };
+    } catch (e) {
+      print('❌ Error saving location: $e');
+      return {
+        'ok': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// تحديث اسم وإيموجي الموقع
+  Future<Map<String, dynamic>> updateLocationName({
+    required String locationId,
+    String? name,
+    String? emoji,
+  }) async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'PATCH',
+        endpoint: '${ApiConfig.baseUrl()}/saved-locations/$locationId/',
+        body: {
+          if (name != null) 'name': name,
+          if (emoji != null) 'emoji': emoji,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('✅ Location updated successfully');
+
+        return {
+          'ok': true,
+          'location': SavedLocation.fromJson(data),
+        };
+      } else {
+        print('⚠️ Failed to update location: ${response.statusCode}');
+        return {
+          'ok': false,
+          'error': 'Failed to update location',
+        };
+      }
+    } on AuthException catch (e) {
+      print('❌ Auth error updating location: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.message,
+        'needsLogin': e.needsLogin,
+      };
+    } catch (e) {
+      print('❌ Error updating location: $e');
+      return {
+        'ok': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// حذف موقع محفوظ
+  Future<Map<String, dynamic>> deleteLocation(String locationId) async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'DELETE',
+        endpoint: '${ApiConfig.baseUrl()}/saved-locations/$locationId/delete/',
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Location deleted successfully');
+        return {
+          'ok': true,
+          'message': 'Location deleted',
+        };
+      } else {
+        print('⚠️ Failed to delete location: ${response.statusCode}');
+        return {
+          'ok': false,
+          'error': 'Failed to delete location',
+        };
+      }
+    } on AuthException catch (e) {
+      print('❌ Auth error deleting location: ${e.message}');
+      return {
+        'ok': false,
+        'error': e.message,
+        'needsLogin': e.needsLogin,
+      };
+    } catch (e) {
+      print('❌ Error deleting location: $e');
       return {
         'ok': false,
         'error': e.toString(),

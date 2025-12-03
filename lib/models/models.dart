@@ -8,3 +8,4 @@ export 'worker_profile_model.dart';
 export 'client_profile_model.dart';
 export 'task_model.dart';
 export 'task_application_model.dart';
+export 'saved_location_model.dart';

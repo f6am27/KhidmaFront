@@ -4,8 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 enum TaskStatus {
   published,
   active,
-  workCompleted,
-  completed,
   cancelled;
 
   /// Convert from Backend string to enum
@@ -15,10 +13,6 @@ enum TaskStatus {
         return TaskStatus.published;
       case 'active':
         return TaskStatus.active;
-      case 'work_completed':
-        return TaskStatus.workCompleted;
-      case 'completed':
-        return TaskStatus.completed;
       case 'cancelled':
         return TaskStatus.cancelled;
       default:
@@ -33,10 +27,6 @@ enum TaskStatus {
         return 'published';
       case TaskStatus.active:
         return 'active';
-      case TaskStatus.workCompleted:
-        return 'work_completed';
-      case TaskStatus.completed:
-        return 'completed';
       case TaskStatus.cancelled:
         return 'cancelled';
     }
@@ -49,10 +39,6 @@ enum TaskStatus {
         return 'Publiée';
       case TaskStatus.active:
         return 'En cours';
-      case TaskStatus.workCompleted:
-        return 'Travail terminé';
-      case TaskStatus.completed:
-        return 'Terminée';
       case TaskStatus.cancelled:
         return 'Annulée';
     }
@@ -74,13 +60,12 @@ class TaskModel {
   final int clientId;
   final String? clientPhone;
   final String? assignedProvider;
+  final String? providerPhone;
   final int? providerRating;
   final bool isUrgent;
   final LatLng? coordinates;
   final String? timeDescription;
   final double? distance;
-  final DateTime? workStartedAt;
-  final double? finalPrice;
 
   TaskModel({
     required this.id,
@@ -96,13 +81,12 @@ class TaskModel {
     required this.clientId,
     this.clientPhone,
     this.assignedProvider,
+    this.providerPhone,
     this.providerRating,
     this.isUrgent = false,
     this.coordinates,
     this.timeDescription,
     this.distance,
-    this.workStartedAt,
-    this.finalPrice,
   });
 
   /// Create from Backend JSON response
@@ -141,6 +125,9 @@ class TaskModel {
       clientId: _parseToInt(json['client'] ?? json['client_id'] ?? 0),
       clientPhone: json['client_phone'],
       assignedProvider: json['assignedProvider'] ?? json['assigned_provider'],
+      providerPhone:
+          json['providerPhone'] ?? json['provider_phone'], // ✅ أضيفي هذا السطر
+
       providerRating: json['providerRating'] != null
           ? _parseToInt(json['providerRating'])
           : (json['provider_rating'] != null
@@ -151,12 +138,6 @@ class TaskModel {
       timeDescription: json['timeDescription'] ?? json['time_description'],
       distance: json['distance_from_worker'] != null
           ? double.tryParse(json['distance_from_worker'].toString())
-          : null,
-      workStartedAt: json['workStartedAt'] != null
-          ? _parseDateTime(json['workStartedAt'])
-          : null,
-      finalPrice: json['final_price'] != null
-          ? double.tryParse(json['final_price'].toString())
           : null,
     );
   }
@@ -182,6 +163,16 @@ class TaskModel {
     return data;
   }
 
+  /// ✅ Display category - يعرض "Non classifié" إذا null
+  String get displayCategory {
+    return serviceType.isNotEmpty ? serviceType : 'Non classifié';
+  }
+
+  /// ✅ Check if task is unclassified
+  bool get isUnclassified {
+    return serviceType.isEmpty || serviceType == 'Non classifié';
+  }
+
   /// Copy with method for updating fields
   TaskModel copyWith({
     String? id,
@@ -197,6 +188,8 @@ class TaskModel {
     int? clientId,
     String? clientPhone,
     String? assignedProvider,
+    String? providerPhone, // ✅ أضيفي هذا السطر
+
     int? providerRating,
     bool? isUrgent,
     LatLng? coordinates,
@@ -216,6 +209,8 @@ class TaskModel {
       clientId: clientId ?? this.clientId,
       clientPhone: clientPhone ?? this.clientPhone,
       assignedProvider: assignedProvider ?? this.assignedProvider,
+      providerPhone: providerPhone ?? this.providerPhone, // ✅ أضيفي هذا السطر
+
       providerRating: providerRating ?? this.providerRating,
       isUrgent: isUrgent ?? this.isUrgent,
       coordinates: coordinates ?? this.coordinates,

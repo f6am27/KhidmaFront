@@ -375,7 +375,7 @@ class _TaskCandidatesScreenState extends State<TaskCandidatesScreen> {
                     color: ThemeColors.primaryColor,
                   ),
                   label: Text(
-                    'Contacter',
+                    'Discuter',
                     style: TextStyle(color: ThemeColors.primaryColor),
                   ),
                   style: OutlinedButton.styleFrom(

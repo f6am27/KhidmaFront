@@ -1,9 +1,11 @@
 // lib/services/task_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
 import '../core/config/api_config.dart';
 import '../models/task_model.dart';
 import '../models/task_application_model.dart';
+import '../models/task_counter_model.dart';
 import 'auth_manager.dart';
 import 'service_category_mapper.dart';
 import '../models/review_model.dart';
@@ -27,28 +29,23 @@ class TaskService {
     String? timeDescription,
   }) async {
     try {
-      // Import the mapper at the top of the file
-      // import '../utils/service_category_mapper.dart';
-
-      // Convert serviceType to category ID
-      final categoryId = ServiceCategoryMapper.getCategoryId(serviceType);
-      if (categoryId == null) {
-        return {
-          'ok': false,
-          'error': 'Type de service invalide',
-          'json': {},
-        };
-      }
-
       final body = {
         'title': title,
         'description': description,
-        'service_category_id': categoryId,
         'budget': budget,
         'location': location,
         'preferred_time': preferredTime,
         'is_urgent': isUrgent,
       };
+
+      // ✅ السماح بـ serviceType فارغ
+      if (serviceType.isNotEmpty) {
+        final categoryId = ServiceCategoryMapper.getCategoryId(serviceType);
+        if (categoryId != null) {
+          body['service_category_id'] = categoryId;
+        }
+      }
+      // إذا serviceType فارغ، لا نضيف service_category_id أصلاً
 
       // Add coordinates if available
       if (latitude != null && longitude != null) {
@@ -152,7 +149,7 @@ class TaskService {
             print('════════ TASK $i ════════');
             print('Task data type: ${tasksData[i].runtimeType}');
 
-            // التحقق من أن العنصر هو Map
+            // Ensure element is Map
             if (tasksData[i] is! Map) {
               print(
                   '❌ Task $i is NOT a Map! Type: ${tasksData[i].runtimeType}');
@@ -265,12 +262,24 @@ class TaskService {
 
       if (title != null) body['title'] = title;
       if (description != null) body['description'] = description;
+
+      // ✅ معالجة التصنيف - يسمح بـ null
       if (serviceType != null) {
-        final categoryId = ServiceCategoryMapper.getCategoryId(serviceType);
-        if (categoryId != null) {
-          body['service_category_id'] = categoryId;
+        if (serviceType.isEmpty) {
+          // ✅ إذا فارغ، أرسل null
+          body['service_category_id'] = null;
+        } else {
+          // ✅ إذا موجود، ابحث عن ID
+          final categoryId = ServiceCategoryMapper.getCategoryId(serviceType);
+          if (categoryId != null) {
+            body['service_category_id'] = categoryId;
+          } else {
+            // ✅ إذا لم يُعثر على ID، أرسل null
+            body['service_category_id'] = null;
+          }
         }
       }
+
       if (budget != null) body['budget'] = budget;
       if (location != null) body['location'] = location;
       if (preferredTime != null) body['preferredTime'] = preferredTime;
@@ -298,6 +307,48 @@ class TaskService {
         return {
           'ok': false,
           'error': json['detail'] ?? 'Échec de mise à jour',
+          'json': json,
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      return {
+        'ok': false,
+        'error': 'Erreur réseau: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
+  /// Cancel task (للعميل)
+  Future<Map<String, dynamic>> cancelTask({
+    required String taskId,
+  }) async {
+    try {
+      final response = await AuthManager.authenticatedRequest(
+        method: 'PUT',
+        endpoint: '$_baseUrl/tasks/$taskId/status/',
+        body: {'status': 'cancelled'},
+      );
+
+      final json = _parseResponse(response);
+
+      if (response.statusCode == 200) {
+        return {
+          'ok': true,
+          'message': json['message'] ?? 'Tâche annulée avec succès',
+          'json': json,
+        };
+      } else {
+        return {
+          'ok': false,
+          'error': json['detail'] ?? json['error'] ?? 'Échec d\'annulation',
           'json': json,
         };
       }
@@ -372,6 +423,28 @@ class TaskService {
   }
 
   /// Accept worker for task (للعميل)
+  ///
+  /// Backend: POST /api/tasks/{id}/accept_worker/
+  ///
+  /// On success:
+  /// {
+  ///   'ok': true,
+  ///   'message': ...,
+  ///   'taskStatus': String,
+  ///   'assignedWorker': dynamic,
+  ///   'clientCounter': TaskCounterModel?,
+  ///   'workerCounter': TaskCounterModel?,
+  ///   'json': rawJson,
+  /// }
+  ///
+  /// On 403 with soft-lock:
+  /// {
+  ///   'ok': false,
+  ///   'subscriptionRequired': true,
+  ///   'errorType': 'client_limit_reached' | ...,
+  ///   'message': ...,
+  ///   'json': rawJson,
+  /// }
   Future<Map<String, dynamic>> acceptWorker({
     required String taskId,
     required String workerId,
@@ -383,169 +456,72 @@ class TaskService {
         body: {'worker_id': workerId},
       );
 
-      final json = _parseResponse(response);
+      final dynamic json = _parseResponse(response);
 
       if (response.statusCode == 200) {
-        return {
-          'ok': true,
-          'message': json['message'] ?? 'Candidat accepté',
-          'json': json,
-        };
-      } else {
-        return {
-          'ok': false,
-          'error': json['detail'] ?? 'Échec d\'acceptation',
-          'json': json,
-        };
-      }
-    } on AuthException catch (e) {
-      return {
-        'ok': false,
-        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
-        'needsLogin': e.needsLogin,
-        'json': {},
-      };
-    } catch (e) {
-      return {
-        'ok': false,
-        'error': 'Erreur réseau: ${e.toString()}',
-        'json': {},
-      };
-    }
-  }
+        TaskCounterModel? clientCounter;
+        TaskCounterModel? workerCounter;
 
-  /// Confirm task completion and payment (للعميل فقط)
-  /// Used when client confirms the work is done and approves payment
-  Future<Map<String, dynamic>> confirmTaskCompletion({
-    required String taskId,
-    double? finalPrice, // ← جديد
-  }) async {
-    return await updateTaskStatus(
-      taskId: taskId,
-      status: 'completed',
-      finalPrice: finalPrice, // ← جديد
-    );
-  }
+        if (json is Map<String, dynamic>) {
+          final taskCounter = json['task_counter'];
+          if (taskCounter is Map<String, dynamic>) {
+            final clientJson = taskCounter['client'];
+            final workerJson = taskCounter['worker'];
 
-  /// Submit task review (للعميل)
-  Future<Map<String, dynamic>> submitTaskReview({
-    required String taskId,
-    required int rating,
-    String? reviewText,
-  }) async {
-    try {
-      // ✅ تحويل taskId إلى int
-      final taskIdInt = int.tryParse(taskId);
-      if (taskIdInt == null) {
-        return {
-          'ok': false,
-          'error': 'ID de tâche invalide',
-          'json': {},
-        };
-      }
-
-      final body = <String, dynamic>{
-        'rating': rating,
-      };
-
-      if (reviewText != null && reviewText.isNotEmpty) {
-        body['review_text'] = reviewText;
-      }
-
-      print('🔍 Review endpoint: $_baseUrl/tasks/$taskIdInt/review/');
-      print('🔍 Review body: $body');
-
-      final response = await AuthManager.authenticatedRequest(
-        method: 'POST',
-        endpoint: '$_baseUrl/tasks/$taskIdInt/review/',
-        body: body,
-      );
-
-      print('🔍 Review response: ${response.statusCode}');
-      print('🔍 Review body: ${response.body}');
-      final json = _parseResponse(response);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return {
-          'ok': true,
-          'message': 'Évaluation envoyée',
-          'json': json is Map ? json : {},
-        };
-      } else {
-        // ✅ معالجة آمنة للـ error
-        String errorMessage = 'Échec d\'envoi';
-
-        if (json is List && json.isNotEmpty) {
-          errorMessage = json[0].toString();
-        } else if (json is Map) {
-          errorMessage = json['detail']?.toString() ??
-              json['error']?.toString() ??
-              'Échec d\'envoi';
-        } else if (json is String) {
-          errorMessage = json;
+            if (clientJson is Map<String, dynamic>) {
+              clientCounter = TaskCounterModel.fromJson(clientJson);
+            }
+            if (workerJson is Map<String, dynamic>) {
+              workerCounter = TaskCounterModel.fromJson(workerJson);
+            }
+          }
         }
 
         return {
-          'ok': false,
-          'error': errorMessage,
-          'json': json is Map ? json : {},
-        };
-      }
-    } on AuthException catch (e) {
-      return {
-        'ok': false,
-        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
-        'needsLogin': e.needsLogin,
-        'json': {},
-      };
-    } catch (e) {
-      print('❌ Review error: $e');
-      return {
-        'ok': false,
-        'error': 'Erreur: ${e.toString()}',
-        'json': {},
-      };
-    }
-  }
-
-  /// Update task status (للعميل والعامل)
-  Future<Map<String, dynamic>> updateTaskStatus({
-    required String taskId,
-    required String status, // 'work_completed', 'completed', 'cancelled'
-    double? finalPrice, // ← جديد
-  }) async {
-    try {
-      final body = <String, dynamic>{
-        'status': status,
-      };
-
-      // ✅ إضافة final_price إذا كان موجوداً
-      if (finalPrice != null) {
-        body['final_price'] = finalPrice;
-      }
-
-      final response = await AuthManager.authenticatedRequest(
-        method: 'PUT',
-        endpoint: '$_baseUrl/tasks/$taskId/status/',
-        body: body,
-      );
-
-      final json = _parseResponse(response);
-
-      if (response.statusCode == 200) {
-        return {
           'ok': true,
-          'message': json['message'] ?? 'Statut mis à jour',
-          'final_price': json['final_price'], // ← جديد
-          'json': json,
-        };
-      } else {
-        return {
-          'ok': false,
-          'error': json['detail'] ?? 'Échec de mise à jour',
+          'message':
+              (json is Map ? json['message'] : null) ?? 'Candidat accepté',
+          'taskStatus': json is Map ? json['task_status'] : null,
+          'assignedWorker': json is Map ? json['assigned_worker'] : null,
+          'clientCounter': clientCounter,
+          'workerCounter': workerCounter,
           'json': json,
         };
       }
+
+      // Handle soft-lock / subscription_required
+      if (response.statusCode == 403 && json is Map<String, dynamic>) {
+        final error = json['error']?.toString();
+        final errorType = json['error_type']?.toString();
+        final subscriptionRequired = error == 'subscription_required' ||
+            (errorType != null && errorType.contains('limit_reached'));
+
+        if (subscriptionRequired) {
+          return {
+            'ok': false,
+            'subscriptionRequired': true,
+            'errorType': errorType,
+            'message': json['message']?.toString() ??
+                json['detail']?.toString() ??
+                'Abonnement requis',
+            'json': json,
+          };
+        }
+      }
+
+      final errorMessage = (json is Map<String, dynamic>)
+          ? (json['detail'] ??
+                  json['error'] ??
+                  json['message'] ??
+                  'Échec d\'acceptation')
+              .toString()
+          : 'Échec d\'acceptation';
+
+      return {
+        'ok': false,
+        'error': errorMessage,
+        'json': json,
+      };
     } on AuthException catch (e) {
       return {
         'ok': false,
@@ -572,9 +548,9 @@ class TaskService {
     int? budgetMax,
     String?
         sortBy, // 'latest', 'budget_high', 'budget_low', 'urgent', 'nearest'
-    double? lat, // ← جديد
-    double? lng, // ← جديد
-    int? limit, // ← جديد
+    double? lat, // worker latitude
+    double? lng, // worker longitude
+    int? limit,
   }) async {
     try {
       String endpoint = '$_baseUrl/tasks/available/';
@@ -586,7 +562,6 @@ class TaskService {
       if (budgetMax != null) queryParams.add('budget_max=$budgetMax');
       if (sortBy != null) queryParams.add('sort_by=$sortBy');
 
-      // ← جديد: إرسال موقع العامل
       if (lat != null) queryParams.add('lat=$lat');
       if (lng != null) queryParams.add('lng=$lng');
       if (limit != null) queryParams.add('limit=$limit');
@@ -655,13 +630,23 @@ class TaskService {
   }
 
   /// Apply to task (للعامل)
+  ///
+  /// On success: same as before.
+  ///
+  /// On 403 with worker soft-lock:
+  /// {
+  ///   'ok': false,
+  ///   'subscriptionRequired': true,
+  ///   'errorType': 'worker_limit_reached' | ...,
+  ///   'message': ...,
+  ///   'json': rawJson,
+  /// }
   Future<Map<String, dynamic>> applyToTask({
     required String taskId,
     String? message,
   }) async {
     try {
-      // ✅ تحويل آمن من String إلى int
-
+      // Safe conversion from String to int
       final taskIdInt = int.tryParse(taskId);
 
       if (taskIdInt == null) {
@@ -679,7 +664,6 @@ class TaskService {
       }
 
       print('🔍 Sending to: $_baseUrl/tasks/$taskIdInt/apply/');
-
       print('🔍 Body: $body');
 
       final response = await AuthManager.authenticatedRequest(
@@ -689,16 +673,12 @@ class TaskService {
       );
 
       print('🔍 Response Status: ${response.statusCode}');
-
       print('🔍 Response Body: ${response.body}');
-
-      // ✅ معالجة آمنة للـ Response
 
       dynamic json;
 
       try {
         json = _parseResponse(response);
-
         print('🔍 Parsed JSON: $json');
       } catch (parseError) {
         print('❌ Parse Error: $parseError');
@@ -717,20 +697,35 @@ class TaskService {
           'json': json is Map ? json : {},
         };
       } else {
-        // ✅ معالجة آمنة للـ error من Backend
+        // Handle soft-lock / subscription_required for workers
+        if (response.statusCode == 403 && json is Map<String, dynamic>) {
+          final error = json['error']?.toString();
+          final errorType = json['error_type']?.toString();
+          final subscriptionRequired = error == 'subscription_required' ||
+              (errorType != null && errorType.contains('limit_reached'));
 
+          if (subscriptionRequired) {
+            return {
+              'ok': false,
+              'subscriptionRequired': true,
+              'errorType': errorType,
+              'message': json['message']?.toString() ??
+                  json['detail']?.toString() ??
+                  'Limite atteinte, abonnement requis',
+              'json': json,
+            };
+          }
+        }
+
+        // Generic error handling
         String errorMessage = 'Échec de candidature';
 
         if (json is Map<String, dynamic>) {
-          // Backend يرجع: {"detail": "error message"}
-
           errorMessage = json['detail']?.toString() ??
               json['error']?.toString() ??
               json['message']?.toString() ??
               'Échec de candidature';
         } else if (json is List) {
-          // إذا كان Backend يرجع array
-
           errorMessage =
               json.isNotEmpty ? json[0].toString() : 'Échec de candidature';
         } else if (json is String) {
@@ -756,7 +751,6 @@ class TaskService {
       };
     } catch (e, stackTrace) {
       print('❌ Unexpected Error: $e');
-
       print('❌ StackTrace: $stackTrace');
 
       return {
@@ -766,6 +760,7 @@ class TaskService {
       };
     }
   }
+
   // ==================== COMMON ENDPOINTS ====================
 
   /// Get task statistics
@@ -809,6 +804,87 @@ class TaskService {
 
   // ==================== REVIEWS ENDPOINTS ====================
 
+  /// Submit task review (للعميل)
+  Future<Map<String, dynamic>> submitTaskReview({
+    required String taskId,
+    required int rating,
+    String? reviewText,
+  }) async {
+    try {
+      // Convert taskId to int
+      final taskIdInt = int.tryParse(taskId);
+      if (taskIdInt == null) {
+        return {
+          'ok': false,
+          'error': 'ID de tâche invalide',
+          'json': {},
+        };
+      }
+
+      final body = <String, dynamic>{
+        'rating': rating,
+      };
+
+      if (reviewText != null && reviewText.isNotEmpty) {
+        body['review_text'] = reviewText;
+      }
+
+      print('🔍 Review endpoint: $_baseUrl/tasks/$taskIdInt/review/');
+      print('🔍 Review body: $body');
+
+      final response = await AuthManager.authenticatedRequest(
+        method: 'POST',
+        endpoint: '$_baseUrl/tasks/$taskIdInt/review/',
+        body: body,
+      );
+
+      print('🔍 Review response: ${response.statusCode}');
+      print('🔍 Review body: ${response.body}');
+      final json = _parseResponse(response);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return {
+          'ok': true,
+          'message': 'Évaluation envoyée',
+          'json': json is Map ? json : {},
+        };
+      } else {
+        // Safe error handling
+        String errorMessage = 'Échec d\'envoi';
+
+        if (json is List && json.isNotEmpty) {
+          errorMessage = json[0].toString();
+        } else if (json is Map) {
+          errorMessage = json['detail']?.toString() ??
+              json['error']?.toString() ??
+              'Échec d\'envoi';
+        } else if (json is String) {
+          errorMessage = json;
+        }
+
+        return {
+          'ok': false,
+          'error': errorMessage,
+          'json': json is Map ? json : {},
+        };
+      }
+    } on AuthException catch (e) {
+      return {
+        'ok': false,
+        'error': e.needsLogin ? 'Veuillez vous reconnecter' : e.message,
+        'needsLogin': e.needsLogin,
+        'json': {},
+      };
+    } catch (e) {
+      print('❌ Review error: $e');
+      return {
+        'ok': false,
+        'error': 'Erreur: ${e.toString()}',
+        'json': {},
+      };
+    }
+  }
+
   /// Get my reviews (للعامل)
   Future<Map<String, dynamic>> getMyReviews({
     int? rating,
@@ -822,8 +898,9 @@ class TaskService {
       List<String> queryParams = [];
 
       if (rating != null) queryParams.add('rating=$rating');
-      if (search != null && search.isNotEmpty)
+      if (search != null && search.isNotEmpty) {
         queryParams.add('search=$search');
+      }
       if (ordering != null) queryParams.add('ordering=$ordering');
       queryParams.add('limit=$limit');
       queryParams.add('offset=$offset');
@@ -925,6 +1002,7 @@ class TaskService {
   }
 
   // ==================== HELPER METHODS ====================
+
   dynamic _parseResponse(http.Response response) {
     try {
       if (response.body.isEmpty) return {};

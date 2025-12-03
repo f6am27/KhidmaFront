@@ -553,7 +553,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     color: ThemeColors.primaryColor,
                   ),
                   label: Text(
-                    'Contacter',
+                    'Discuter',
                     style: TextStyle(color: ThemeColors.primaryColor),
                   ),
                   style: OutlinedButton.styleFrom(

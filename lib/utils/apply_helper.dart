@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/shared_screens/dialogs/success_dialog.dart';
+import '../screens/shared_screens/dialogs/subscription_prompt_dialog.dart';
 
 void handleApplyResult(
   BuildContext context,
@@ -8,6 +9,9 @@ void handleApplyResult(
 }) {
   print('🔎 handleApplyResult called with: $result');
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 1. تحقق من النجاح أولاً
+  // ═══════════════════════════════════════════════════════════
   if (result['ok'] == true || result['ok'] == 'true') {
     print('✅ Success condition matched!');
     SuccessDialog.show(
@@ -20,10 +24,81 @@ void handleApplyResult(
     return;
   }
 
-  final errorMsg = (result['error'] ?? '').toString().toLowerCase();
-  print('🔎 Parsed errorMsg in handleApplyResult: "$errorMsg"');
+  // ═══════════════════════════════════════════════════════════
+  // 🔒 2. تحقق من Soft Lock - **أولوية قصوى!**
+  // ═══════════════════════════════════════════════════════════
 
-  // ✅ تقديم سابق
+  // ✅ التحقق المباشر من subscriptionRequired (الطريقة الأساسية)
+  if (result['subscriptionRequired'] == true) {
+    print('🔒 Soft Lock detected via subscriptionRequired flag!');
+
+    // استخراج معلومات العداد
+    final counter = result['counter'];
+    final errorType = result['errorType']?.toString() ?? 'worker_limit_reached';
+    final message = result['message']?.toString() ??
+        result['error']?.toString() ??
+        'Limite atteinte, abonnement requis';
+
+    int tasksUsed = 5;
+    int tasksRemaining = 0;
+
+    if (counter != null && counter is Map) {
+      tasksUsed = counter['tasks_used'] ?? counter['applicationsUsed'] ?? 5;
+      tasksRemaining =
+          counter['tasks_remaining'] ?? counter['applicationsRemaining'] ?? 0;
+    }
+
+    SubscriptionPromptDialog.show(
+      context,
+      role: 'worker', // ← مهم جداً!
+      tasksUsed: tasksUsed,
+      tasksRemaining: tasksRemaining,
+      errorMessage: message,
+    );
+    return;
+  }
+
+  // ✅ Fallback: التحقق من النص (للتوافق مع إصدارات قديمة من Backend)
+  final errorMsg =
+      (result['error'] ?? result['message'] ?? '').toString().toLowerCase();
+  print('🔎 Parsed errorMsg: "$errorMsg"');
+
+  if (errorMsg.contains('limite') ||
+      errorMsg.contains('limit') ||
+      errorMsg.contains('abonnement') ||
+      errorMsg.contains('subscription') ||
+      errorMsg.contains('5 candidatures gratuites') ||
+      errorMsg.contains('5 free applications') ||
+      errorMsg.contains('maximum') ||
+      errorMsg.contains('atteint') ||
+      errorMsg.contains('dépassé') ||
+      errorMsg.contains('exceeded')) {
+    print('🔒 Soft Lock detected via error message!');
+
+    // استخراج معلومات العداد من الـ response
+    final counter = result['counter'];
+    int tasksUsed = 5;
+    int tasksRemaining = 0;
+
+    if (counter != null && counter is Map) {
+      tasksUsed = counter['tasks_used'] ?? counter['applicationsUsed'] ?? 5;
+      tasksRemaining =
+          counter['tasks_remaining'] ?? counter['applicationsRemaining'] ?? 0;
+    }
+
+    SubscriptionPromptDialog.show(
+      context,
+      role: 'worker',
+      tasksUsed: tasksUsed,
+      tasksRemaining: tasksRemaining,
+      errorMessage: result['error']?.toString(),
+    );
+    return;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 3. تقديم سابق
+  // ═══════════════════════════════════════════════════════════
   if (errorMsg.contains('déjà') ||
       errorMsg.contains('already') ||
       errorMsg.contains('existe') ||
@@ -41,7 +116,9 @@ void handleApplyResult(
     return;
   }
 
-  // ✅ تصنيف خاطئ
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 4. تصنيف خاطئ
+  // ═══════════════════════════════════════════════════════════
   if (errorMsg.contains('category') ||
       errorMsg.contains('catégorie') ||
       errorMsg.contains('not allowed') ||
@@ -63,15 +140,22 @@ void handleApplyResult(
     return;
   }
 
-  // ⚠️ أخطاء أخرى
-  print('⚠️ No condition matched - showing snackbar');
+  // ═══════════════════════════════════════════════════════════
+  // ⚠️ 5. أخطاء عامة أخرى
+  // ═══════════════════════════════════════════════════════════
+  print('⚠️ No specific condition matched - showing generic error');
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
         errorMsg.isNotEmpty ? errorMsg : 'Erreur inconnue',
       ),
       backgroundColor: Colors.red,
-      duration: Duration(seconds: 3),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      margin: EdgeInsets.all(16),
+      duration: Duration(seconds: 4),
     ),
   );
 }

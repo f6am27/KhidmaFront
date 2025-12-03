@@ -12,7 +12,6 @@ import '../../shared_screens/settings/language.dart';
 import '../../shared_screens/settings/support.dart';
 import '../../shared_screens/settings/blocked_users_screen.dart';
 import 'widgets/favorite_providers.dart';
-import '../../shared_screens/payment_history.dart';
 import '../../../services/auth_manager.dart';
 import '../../../routes/app_routes.dart';
 import '../../../services/notification_service.dart';
@@ -313,22 +312,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          _buildStatItem(
-              context,
-              _clientProfile?.totalTasksPublished.toString() ?? '0',
-              'Demandes\nPubliées',
-              Icons.assignment_outlined, // أيقونة للمهام المنشورة
-              Colors.green), // لون مخصص
-          _buildDivider(context),
-          _buildStatItem(
-              context,
-              _clientProfile?.totalTasksCompleted.toString() ?? '0',
-              'Services\nTerminés',
-              Icons.verified, // أيقونة المهام المكتملة (مهمة + صح)
-              Colors.green), // لون أخضر للإشارة للإنجاز
-        ],
+      child: Center(
+        child: _buildStatItem(
+          context,
+          _clientProfile?.totalTasksPublished.toString() ?? '0',
+          'Tâches\nPubliées',
+          Icons.assignment_outlined,
+          ThemeColors.primaryColor,
+        ),
       ),
     );
   }
@@ -356,15 +347,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDivider(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      width: 1,
-      height: 40,
-      color: isDark ? ThemeColors.darkBorder : ThemeColors.lightBorder,
     );
   }
 
@@ -396,21 +378,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => FavoriteProvidersScreen(),
-                ),
-              );
-            },
-          ),
-          _buildMenuDivider(context),
-          _buildMenuItem(
-            context: context,
-            icon: Icons.payment,
-            title: 'Historique des Paiements',
-            subtitle: 'Vos transactions et factures',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PaymentHistoryScreen(),
                 ),
               );
             },

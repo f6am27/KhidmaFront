@@ -11,6 +11,7 @@ import '../../../core/config/api_config.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../shared_screens/dialogs/success_dialog.dart';
 import '../../../utils/apply_helper.dart';
+import '../../../services/profile_service.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({Key? key}) : super(key: key);
@@ -26,18 +27,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   String _currentLocation = "Nouakchott";
   String _currentCountry = "Mauritanie";
   bool _isLocationLoading = false;
-  String _workerName = "Omar Ba";
   bool _isLoadingTasks = true;
   List<TaskModel> _tasks = [];
   LatLng? _workerLocation;
+  String? _workerCategory;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // ← تم الإضافة
-    _setWorkerOnline(); // ✅ أضف هذا السطر
+    WidgetsBinding.instance.addObserver(this);
+    _setWorkerOnline();
     _loadLocationState();
     _checkAndStartTracking();
+    _loadWorkerCategory(); // ✅ أضيفي هذا السطر
     _loadTasks();
   }
 
@@ -94,6 +96,21 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     }
   }
 
+  Future<void> _loadWorkerCategory() async {
+    try {
+      final result = await profileService.getWorkerProfile();
+      if (result['ok']) {
+        final workerProfile = result['workerProfile'] as WorkerProfile;
+        setState(() {
+          _workerCategory = workerProfile.serviceCategory;
+        });
+        print('🔎 Worker category loaded: $_workerCategory');
+      }
+    } catch (e) {
+      print('❌ Error loading worker category: $e');
+    }
+  }
+
   Future<void> _loadTasks() async {
     setState(() => _isLoadingTasks = true);
 
@@ -110,7 +127,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       setState(() {
         _isLoadingTasks = false;
         if (result['ok']) {
-          _tasks = (result['tasks'] as List<TaskModel>).take(4).toList();
+          List<TaskModel> allTasks = result['tasks'] as List<TaskModel>;
+
+          // ✅ تصفية المهام: مهام التصنيف + غير المصنفة
+          if (_workerCategory != null && _workerCategory!.isNotEmpty) {
+            final workerCat = _workerCategory!.toLowerCase().trim();
+            allTasks = allTasks.where((task) {
+              final taskCat = task.serviceType.toLowerCase().trim();
+              // عرض مهام تصنيف العامل أو المهام غير المصنفة
+              return taskCat == workerCat || task.isUnclassified;
+            }).toList();
+          }
+
+          _tasks = allTasks.take(4).toList();
         }
       });
     }
@@ -694,22 +723,27 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                task.location,
-                style: TextStyle(
-                  fontSize: 11,
+              Icon(Icons.location_on_outlined,
+                  size: 16,
                   color: Theme.of(context).brightness == Brightness.dark
                       ? ThemeColors.darkTextSecondary
-                      : ThemeColors.lightTextSecondary,
+                      : ThemeColors.lightTextSecondary),
+              const SizedBox(width: 4),
+              Expanded(
+                // ✅ أضف Expanded
+                child: Text(
+                  task.location,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? ThemeColors.darkTextSecondary
+                        : ThemeColors.lightTextSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis, // ✅ قص النص الطويل
+                  maxLines: 1, // ✅ سطر واحد فقط
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8), // ✅ استبدل Spacer بمسافة ثابتة
               Text(
                 task.preferredTime,
                 style: TextStyle(
@@ -767,6 +801,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   }
 
   IconData _getCategoryIcon(String serviceType) {
+    if (serviceType.toLowerCase() == "non classifié" ||
+        serviceType.toLowerCase() == "non classifie") {
+      return Icons.help_outline; // ✅ علامة استفهام برتقالية
+    }
     switch (serviceType.toLowerCase()) {
       case 'nettoyage':
       case 'nettoyage maison':
